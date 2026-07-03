@@ -1060,10 +1060,10 @@ export const Minigames = (() => {
       name: 'Two-Floor Drop',
       rows: [
         '###############',
-        '#S..*.........#',
+        '#S..*......B..#',
         '######...######',
         '#.............#',
-        '#.....*.......#',
+        '#.....*..^....#',
         '#..#########..#',
         '#...........G.#',
         '###############',
@@ -1076,7 +1076,7 @@ export const Minigames = (() => {
         '#S..K.........#',
         '######...######',
         '#.............#',
-        '#....*....D...#',
+        '#....*..B.D...#',
         '#..#########..#',
         '#..........G..#',
         '###############',
@@ -1089,7 +1089,7 @@ export const Minigames = (() => {
         '#S..........*.#',
         '#####..########',
         '#.............#',
-        '#..*.....K....#',
+        '#..*..^..K....#',
         '#..########..D#',
         '#............G#',
         '###############',
@@ -1101,9 +1101,9 @@ export const Minigames = (() => {
         '###############',
         '#S............#',
         '#######..######',
-        '#.......*.....#',
+        '#.......*..B..#',
         '#..#######....#',
-        '#...K.....D...#',
+        '#...K..^..D...#',
         '#..#########G.#',
         '###############',
       ],
@@ -1116,7 +1116,7 @@ export const Minigames = (() => {
         '#..######..####',
         '#.............#',
         '####..#########',
-        '#...K.....*..G#',
+        '#...K..B..*..G#',
         '#..#########D##',
         '###############',
       ],
@@ -1127,9 +1127,9 @@ export const Minigames = (() => {
         '###############',
         '#S....*.......#',
         '########..#####',
-        '#............K#',
+        '#......B.....K#',
         '#..#########..#',
-        '#.....*...D...#',
+        '#..^..*...D...#',
         '#..#########G.#',
         '###############',
       ],
@@ -1137,20 +1137,21 @@ export const Minigames = (() => {
   ];
   const ROLL_CUSTOM_START = [
     '###############',
-    '#S....*.......#',
+    '#S....*....B..#',
     '######...######',
     '#.............#',
-    '#.............#',
+    '#......^......#',
     '#..#########..#',
     '#..........G..#',
     '###############',
   ];
   const ROLL_GRAVITY = 9.4;
   const ROLL_MAX_SPEED = 7.0;
-  const ROLL_ACCEL = 10.5;
-  const ROLL_PALETTE = ['.', '#', '*', 'K', 'D', 'G', 'S'];
+  const ROLL_DRIVE_SPEED = 4.8;
+  const ROLL_BALL_R = 0.38;
+  const ROLL_PALETTE = ['.', '#', '*', 'K', 'D', 'B', '^', 'G', 'S'];
   const ROLL_NAMES: Record<string, string> = {
-    '.': 'path', '#': 'wall', '*': 'star', K: 'key', D: 'gate', G: 'goal', S: 'start',
+    '.': 'path', '#': 'wall', '*': 'star', K: 'key', D: 'gate', B: 'box', '^': 'bounce', G: 'goal', S: 'start',
   };
 
   class RollerLabMinigame extends BaseMinigame {
@@ -1179,6 +1180,7 @@ export const Minigames = (() => {
     rollIntent: number;
     rollT: number;
     spin: number;
+    bounceT: number;
     constructor(done: MinigameDone) {
       super(done);
       this.menuSel = 0;
@@ -1206,6 +1208,7 @@ export const Minigames = (() => {
       this.rollIntent = 0;
       this.rollT = 0;
       this.spin = 0;
+      this.bounceT = 0;
     }
     key(act: string) {
       if (this.phase === 'intro') {
@@ -1271,6 +1274,7 @@ export const Minigames = (() => {
       this.helperUsed = false;
       this.rollIntent = 0;
       this.rollT = 0;
+      this.bounceT = 0;
       this.msg = this.mode === 'trail' ? ROLL_LEVELS[this.level].name : 'Your maze';
       this.msgT = 2.2;
     }
@@ -1337,7 +1341,7 @@ export const Minigames = (() => {
       }
       if (act === 'left' || act === 'right') {
         this.rollIntent = act === 'left' ? -1 : 1;
-        this.rollT = 0.48;
+        this.rollT = 0.34;
       }
       else if (act === 'up') {
         if (this.isGrounded()) { this.vy = -5.6; AudioSys.sfx('pop'); }
@@ -1355,13 +1359,17 @@ export const Minigames = (() => {
       }
       this.levelT += dt;
       this.msgT = Math.max(0, this.msgT - dt);
+      this.bounceT = Math.max(0, this.bounceT - dt);
       this.vy += ROLL_GRAVITY * dt;
       if (this.rollT > 0) {
-        this.vx += this.rollIntent * ROLL_ACCEL * dt * (this.isGrounded() ? 1 : 0.55);
+        const target = this.rollIntent * ROLL_DRIVE_SPEED * (this.isGrounded() ? 1 : 0.75);
+        this.vx += (target - this.vx) * Math.min(1, dt * 18);
         this.rollT = Math.max(0, this.rollT - dt);
+      } else if (this.isGrounded()) {
+        this.vx = 0;
       }
       this.limitSpeed();
-      const drag = Math.pow(this.isGrounded() ? 0.82 : 0.96, dt * 5);
+      const drag = Math.pow(this.isGrounded() ? 0.35 : 0.78, dt * 5);
       this.vx *= drag;
       this.spin += this.vx * dt * 3.8;
       const sub = Math.max(1, Math.ceil(dt / 0.018));
@@ -1379,10 +1387,39 @@ export const Minigames = (() => {
     stepBall(dt: number) {
       const nx = this.ballX + this.vx * dt;
       if (!this.collides(nx, this.ballY)) this.ballX = nx;
-      else this.vx *= -0.22;
+      else if (this.tryPushBox(nx, this.ballY, Math.sign(this.vx))) {
+        if (!this.collides(nx, this.ballY)) this.ballX = nx;
+        this.vx *= 0.3;
+      } else this.vx = 0;
       const ny = this.ballY + this.vy * dt;
       if (!this.collides(this.ballX, ny)) this.ballY = ny;
       else this.vy = this.vy > 0 ? 0 : this.vy * -0.22;
+    }
+    tryPushBox(x: number, y: number, dir: number) {
+      if (!dir) return false;
+      const box = this.touchingBox(x, y);
+      if (!box) return false;
+      const nx = box.x + dir;
+      if (nx < 1 || nx >= this.w - 1 || !this.canMoveBoxInto(nx, box.y)) return false;
+      this.setGrid(nx, box.y, 'B');
+      this.setGrid(box.x, box.y, '.');
+      this.msg = 'Box moved!';
+      this.msgT = 1.0;
+      AudioSys.sfx('pop');
+      return true;
+    }
+    canMoveBoxInto(x: number, y: number) {
+      const ch = this.grid[y][x];
+      return ch === '.' || (ch === 'D' && this.hasKey);
+    }
+    touchingBox(x: number, y: number) {
+      const r = ROLL_BALL_R;
+      for (let ty = Math.floor(y - r); ty <= Math.floor(y + r); ty++) {
+        for (let tx = Math.floor(x - r); tx <= Math.floor(x + r); tx++) {
+          if (ty >= 0 && ty < this.h && tx >= 0 && tx < this.w && this.grid[ty][tx] === 'B') return { x: tx, y: ty };
+        }
+      }
+      return null;
     }
     limitSpeed() {
       const sp = Math.hypot(this.vx, this.vy);
@@ -1392,7 +1429,7 @@ export const Minigames = (() => {
       return this.collides(this.ballX, this.ballY + 0.06);
     }
     collides(x: number, y: number) {
-      const r = 0.28;
+      const r = ROLL_BALL_R;
       for (let ty = Math.floor(y - r); ty <= Math.floor(y + r); ty++) {
         for (let tx = Math.floor(x - r); tx <= Math.floor(x + r); tx++) {
           if (!this.solidAt(tx, ty)) continue;
@@ -1404,7 +1441,7 @@ export const Minigames = (() => {
     solidAt(x: number, y: number) {
       if (x < 0 || y < 0 || y >= this.h || x >= this.w) return true;
       const ch = this.grid[y][x];
-      return ch === '#' || (ch === 'D' && !this.hasKey);
+      return ch === '#' || ch === 'B' || (ch === 'D' && !this.hasKey);
     }
     visitTile() {
       const x = Math.floor(this.ballX), y = Math.floor(this.ballY);
@@ -1422,6 +1459,12 @@ export const Minigames = (() => {
         this.msg = 'Gate key!';
         this.msgT = 1.5;
         AudioSys.sfx('sparkle');
+      } else if (ch === '^' && this.bounceT <= 0) {
+        this.vy = -7.4;
+        this.bounceT = 0.22;
+        this.msg = 'Boing!';
+        this.msgT = 0.9;
+        AudioSys.sfx('whee');
       } else if (ch === 'G') {
         if (this.starsGot >= this.starsTotal) this.finishLevel();
         else if (this.msgT <= 0.2) {
@@ -1494,7 +1537,7 @@ export const Minigames = (() => {
       label(g, 'Floor ' + (this.level + 1) + '/' + ROLL_LEVELS.length + '   ·   Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
       this.drawGrid(g, this.grid, W / 2, 176, true);
       if (this.msgT > 0) label(g, this.msg, W / 2, H - 78, 24, '#5a4a6a');
-      label(g, '← → roll · ↑ hops · ↓ drops · E slows', W / 2, H - 38, 18, '#7a6a8a');
+      label(g, '← → scoot · ↑ hops · ↓ drops · push boxes · bounce pads go boing', W / 2, H - 38, 18, '#7a6a8a');
     }
     drawEditor(g: Ctx, W: number, H: number) {
       label(g, 'Map Maker', W / 2, 62, 34, '#7a4a9a');
@@ -1533,14 +1576,32 @@ export const Minigames = (() => {
       }
       if (withBall) {
         const bx = ox + this.ballX * cell, by = top + this.ballY * cell;
-        g.fillStyle = '#9a7ad0'; g.beginPath(); g.arc(bx, by, cell * .28, 0, 7); g.fill();
-        g.fillStyle = '#cdb0ee'; g.beginPath(); g.arc(bx - cell * .09, by - cell * .1, cell * .09, 0, 7); g.fill();
-        g.strokeStyle = 'rgba(255,255,255,.78)'; g.lineWidth = Math.max(2, cell * .05);
-        g.beginPath();
-        g.moveTo(bx, by);
-        g.lineTo(bx + Math.cos(this.spin) * cell * .23, by + Math.sin(this.spin) * cell * .23);
-        g.stroke();
+        this.drawBall(g, bx, by, cell);
       }
+    }
+    drawBall(g: Ctx, bx: number, by: number, cell: number) {
+      const r = cell * 0.4;
+      g.fillStyle = 'rgba(60,40,80,.18)';
+      g.beginPath(); g.ellipse(bx, by + r * .86, r * .9, r * .24, 0, 0, 7); g.fill();
+      g.fillStyle = '#ff9ec5'; g.beginPath(); g.arc(bx, by, r, 0, 7); g.fill();
+      g.strokeStyle = '#b85c8a'; g.lineWidth = Math.max(2, cell * .05); g.stroke();
+      g.fillStyle = '#ffd1e3'; g.beginPath(); g.arc(bx - r * .24, by - r * .28, r * .28, 0, 7); g.fill();
+      g.fillStyle = '#3b2948';
+      g.beginPath(); g.arc(bx - r * .33, by - r * .12, r * .085, 0, 7); g.fill();
+      g.beginPath(); g.arc(bx + r * .33, by - r * .12, r * .085, 0, 7); g.fill();
+      g.fillStyle = '#fff';
+      g.beginPath(); g.arc(bx - r * .36, by - r * .16, r * .028, 0, 7); g.fill();
+      g.beginPath(); g.arc(bx + r * .30, by - r * .16, r * .028, 0, 7); g.fill();
+      g.fillStyle = '#ff74a8';
+      g.beginPath(); g.arc(bx - r * .48, by + r * .08, r * .095, 0, 7); g.fill();
+      g.beginPath(); g.arc(bx + r * .48, by + r * .08, r * .095, 0, 7); g.fill();
+      g.strokeStyle = '#6d4160'; g.lineWidth = Math.max(1.5, cell * .035);
+      g.beginPath(); g.arc(bx, by + r * .06, r * .22, 0.15, Math.PI - 0.15); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = Math.max(2, cell * .04);
+      g.beginPath();
+      g.moveTo(bx, by);
+      g.lineTo(bx + Math.cos(this.spin) * r * .62, by + Math.sin(this.spin) * r * .62);
+      g.stroke();
     }
     drawRollTile(g: Ctx, ch: string, x: number, y: number, cell: number) {
       g.fillStyle = '#d9f2e7'; rr(g, x + 1, y + 1, cell - 2, cell - 2, 8); g.fill();
@@ -1556,6 +1617,17 @@ export const Minigames = (() => {
         g.fillStyle = this.hasKey ? 'rgba(154,219,122,.45)' : '#d8a45f';
         rr(g, x + cell * .2, y + cell * .15, cell * .6, cell * .7, 8); g.fill();
         label(g, this.hasKey ? 'open' : 'gate', x + cell / 2, y + cell / 2, Math.max(10, cell * .18), '#5a4a6a');
+      } else if (ch === 'B') {
+        g.fillStyle = '#d49a5c'; rr(g, x + cell * .16, y + cell * .18, cell * .68, cell * .64, 8); g.fill();
+        g.strokeStyle = '#8a5a35'; g.lineWidth = Math.max(2, cell * .05); g.stroke();
+        g.strokeStyle = '#a87840'; g.lineWidth = Math.max(2, cell * .04);
+        g.beginPath(); g.moveTo(x + cell * .28, y + cell * .5); g.lineTo(x + cell * .72, y + cell * .5); g.stroke();
+        g.beginPath(); g.moveTo(x + cell * .5, y + cell * .28); g.lineTo(x + cell * .5, y + cell * .72); g.stroke();
+      } else if (ch === '^') {
+        g.fillStyle = '#ff9ec5'; rr(g, x + cell * .18, y + cell * .56, cell * .64, cell * .22, 8); g.fill();
+        g.strokeStyle = '#b85c8a'; g.lineWidth = Math.max(2, cell * .05); g.stroke();
+        g.fillStyle = '#ffd95f';
+        g.beginPath(); g.moveTo(x + cell * .5, y + cell * .22); g.lineTo(x + cell * .72, y + cell * .55); g.lineTo(x + cell * .28, y + cell * .55); g.closePath(); g.fill();
       } else if (ch === 'G') {
         g.fillStyle = '#7fb8e8'; rr(g, x + cell * .18, y + cell * .2, cell * .64, cell * .6, 10); g.fill();
         label(g, 'GO', x + cell / 2, y + cell / 2, Math.max(14, cell * .28), '#fff8ee');
@@ -2132,7 +2204,7 @@ export const Minigames = (() => {
   api.register('rollerlab', RollerLabMinigame, {
     label: 'Roller Lab', energy: 10, minutes: 35, minEnergy: 10,
     keys: ['left', 'right', 'up', 'down', 'action'],
-    description: 'Roll a gravity-pulled marble through six floor mazes or build and test a tiny custom map.',
+    description: 'Roll a cute gravity-pulled marble through six floor mazes with bounce pads and push boxes, or build and test a tiny custom map.',
   });
   api.register('shells', ShellsMinigame, {
     label: 'Shell Splash', keys: ['left', 'right'],

@@ -115,7 +115,8 @@ stop to ride, and onto the matching stop to ride home again:
 - **Hop the sidewalk hopscotch**, play alphabet **Hopscotch Hero**, **blow bubbles**
   at the bubble stand, play **Bubble Pop**, and pump the **city swings**.
 - Visit **Wonder Roll Park** and play **Roller Lab**, a rolling marble puzzle
-  table with gravity, six floor courses, and a small build-and-test map maker.
+  table with gravity, bounce pads, push boxes, six floor courses, and a small
+  build-and-test map maker.
 - **Make friends with Rosie**, the baker's granddaughter who lives by the
   carousel — fill her hearts for the "City Pal" sticker.
 - **Feed the petting zoo** — Smudge, Cottonball, and Pepper love Critter
