@@ -57,6 +57,7 @@ in them is verified against this codebase. Route by task:
 | New E-interaction, sticker, animation, shop item | `add-activity` |
 | New song or sound effect | `add-music` |
 | Sprite/tile/icon art | `pixel-art` |
+| Picking what to build next | `ROADMAP.md` at repo root |
 
 If you change a convention, update the matching skill in the same
 commit — the skills are load-bearing documentation.
