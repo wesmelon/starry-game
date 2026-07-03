@@ -3,12 +3,31 @@
    Dialogue, HUD, title, sticker book, journal, summary, toasts, tint.
    ====================================================================== */
 
-const UI = (() => {
+import { AudioSys } from './audio';
+import { SpriteLib } from './sprites';
+import { Maps } from './maps';
+import { Entities } from './entities';
+import type { GView } from './types';
 
-  const FONT = (s, w = 700) => `${w} ${s}px "Comic Sans MS", "Segoe UI", sans-serif`;
+type Ctx = CanvasRenderingContext2D;
+export interface ChoiceOpt { label: string; value: string | null; }
+interface Dialog {
+  name: string;
+  lines: string[];
+  idx: number;
+  chars: number;
+  choices: ChoiceOpt[] | null;
+  pendingChoices?: ChoiceOpt[] | null;
+  sel: number;
+  onDone?: ((v: string | null) => void) | null;
+}
+
+export const UI = (() => {
+
+  const FONT = (s: number, w = 700) => `${w} ${s}px "Comic Sans MS", "Segoe UI", sans-serif`;
   const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-  function rr(g, x, y, w, h, r) {
+  function rr(g: Ctx, x: number, y: number, w: number, h: number, r: number) {
     g.beginPath();
     g.moveTo(x + r, y);
     g.arcTo(x + w, y, x + w, y + h, r);
@@ -17,18 +36,18 @@ const UI = (() => {
     g.arcTo(x, y, x + w, y, r);
     g.closePath();
   }
-  function panel(g, x, y, w, h, fill, stroke) {
+  function panel(g: Ctx, x: number, y: number, w: number, h: number, fill: string, stroke?: string) {
     g.save();
     g.shadowColor = 'rgba(50,25,55,.3)'; g.shadowBlur = 14; g.shadowOffsetY = 5;
     rr(g, x, y, w, h, 14); g.fillStyle = fill; g.fill();
     g.restore();
     if (stroke) { rr(g, x, y, w, h, 14); g.strokeStyle = stroke; g.lineWidth = 3; g.stroke(); }
   }
-  function text(g, txt, x, y, size, col, align = 'left', weight = 700) {
+  function text(g: Ctx, txt: string, x: number, y: number, size: number, col: string, align: CanvasTextAlign = 'left', weight = 700) {
     g.font = FONT(size, weight); g.textAlign = align; g.textBaseline = 'middle';
     g.fillStyle = col; g.fillText(txt, x, y);
   }
-  function heart(g, cx, cy, r, col) {
+  function heart(g: Ctx, cx: number, cy: number, r: number, col: string) {
     g.fillStyle = col;
     g.beginPath();
     g.moveTo(cx, cy + r * .9);
@@ -36,7 +55,7 @@ const UI = (() => {
     g.bezierCurveTo(cx + r * .7, cy - r, cx + r * 1.4, cy - r * .1, cx, cy + r * .9);
     g.fill();
   }
-  function starShape(g, cx, cy, r, col) {
+  function starShape(g: Ctx, cx: number, cy: number, r: number, col: string) {
     g.fillStyle = col;
     g.beginPath();
     for (let i = 0; i < 10; i++) {
@@ -47,7 +66,7 @@ const UI = (() => {
     }
     g.closePath(); g.fill();
   }
-  function wrap(g, txt, size, maxW) {
+  function wrap(g: Ctx, txt: string, size: number, maxW: number) {
     g.font = FONT(size);
     const words = txt.split(' '), lines = [];
     let cur = '';
@@ -61,17 +80,17 @@ const UI = (() => {
   }
 
   // ---------------- dialogue ----------------
-  let dialog = null;
+  let dialog: Dialog | null = null;
 
-  function say(name, lines, onDone) {
-    dialog = { name, lines: lines.slice(), idx: 0, chars: 0, choices: null, onDone };
+  function say(name: string, lines: string[], onDone?: ((v: string | null) => void) | null) {
+    dialog = { name, lines: lines.slice(), idx: 0, chars: 0, choices: null, sel: 0, onDone };
   }
-  function choose(name, prompt, opts, onDone) {
+  function choose(name: string, prompt: string, opts: ChoiceOpt[], onDone: (v: string | null) => void) {
     dialog = { name, lines: [prompt], idx: 0, chars: 0, pendingChoices: opts, choices: null, sel: 0, onDone };
   }
   const active = () => !!dialog;
 
-  function dialogKey(act) {
+  function dialogKey(act: string) {
     if (!dialog) return false;
     const d = dialog;
     const lineLen = d.lines[d.idx].length;
@@ -97,7 +116,7 @@ const UI = (() => {
     return true; // swallow keys while talking
   }
 
-  function dialogUpdate(dt) {
+  function dialogUpdate(dt: number) {
     if (!dialog) return;
     const d = dialog;
     if (d.chars < d.lines[d.idx].length) {
@@ -109,7 +128,7 @@ const UI = (() => {
     }
   }
 
-  function drawDialog(g) {
+  function drawDialog(g: Ctx) {
     if (!dialog) return;
     const d = dialog;
     const W = g.canvas.width, H = g.canvas.height;
@@ -141,15 +160,15 @@ const UI = (() => {
   }
 
   // ---------------- toasts ----------------
-  const toasts = [];
-  function toast(msg, icon) { toasts.push({ msg, icon, t: 0 }); }
-  function toastUpdate(dt) {
+  const toasts: { msg: string; icon?: string; t: number }[] = [];
+  function toast(msg: string, icon?: string) { toasts.push({ msg, icon, t: 0 }); }
+  function toastUpdate(dt: number) {
     if (toasts.length) {
       toasts[0].t += dt;
       if (toasts[0].t > 3) toasts.shift();
     }
   }
-  function drawToasts(g) {
+  function drawToasts(g: Ctx) {
     if (!toasts.length) return;
     const t = toasts[0];
     const W = g.canvas.width;
@@ -168,13 +187,13 @@ const UI = (() => {
   }
 
   // ---------------- HUD ----------------
-  function fmtClock(min) {
+  function fmtClock(min: number) {
     let h = Math.floor(min / 60), m = Math.floor(min % 60);
     const ap = h >= 12 ? 'pm' : 'am';
     let hh = h % 12; if (hh === 0) hh = 12;
     return hh + ':' + String(m).padStart(2, '0') + ' ' + ap;
   }
-  function planFor(dow) {
+  function planFor(dow: number) {
     if (dow <= 4) {
       const aft = (dow === 0 || dow === 2 || dow === 4) ? 'Ballet 2pm' : 'Swim 2pm';
       return 'School 9am · ' + aft;
@@ -182,7 +201,7 @@ const UI = (() => {
     return 'Art 9am · then free play!';
   }
 
-  function drawHUD(g, G) {
+  function drawHUD(g: Ctx, G: GView) {
     const W = g.canvas.width;
     // left: energy + stars
     panel(g, 16, 14, 218, 78, 'rgba(255,250,240,.92)');
@@ -212,7 +231,7 @@ const UI = (() => {
     text(g, planFor(G.dow), W - 240, 78, 14, '#9a7ad0');
   }
 
-  function drawLocation(g, label_, t) {
+  function drawLocation(g: Ctx, label_: string, t: number) {
     if (t <= 0) return;
     const a = Math.min(1, t);
     g.save(); g.globalAlpha = a;
@@ -224,7 +243,7 @@ const UI = (() => {
   }
 
   // ---------------- day/night tint ----------------
-  function drawTint(g, tmin, outdoor) {
+  function drawTint(g: Ctx, tmin: number, outdoor: boolean) {
     const W = g.canvas.width, H = g.canvas.height;
     const h = tmin / 60;
     let dusk = 0, night = 0;
@@ -236,7 +255,7 @@ const UI = (() => {
   }
 
   // ---------------- title ----------------
-  function drawTitle(g, t, hasSave, sel, started) {
+  function drawTitle(g: Ctx, t: number, hasSave: boolean, sel: number, started: boolean) {
     const W = g.canvas.width, H = g.canvas.height;
     const grad = g.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, '#2b2440'); grad.addColorStop(0.6, '#5a4a7a'); grad.addColorStop(1, '#b87aa0');
@@ -281,7 +300,7 @@ const UI = (() => {
   }
 
   // ---------------- day summary ----------------
-  function drawSummary(g, G, info, t) {
+  function drawSummary(g: Ctx, G: unknown, info: { day: number; lines: string[] }, t: number) {
     const W = g.canvas.width, H = g.canvas.height;
     const grad = g.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, '#1c1834'); grad.addColorStop(1, '#3a3060');
@@ -301,7 +320,7 @@ const UI = (() => {
   }
 
   // ---------------- sticker book ----------------
-  function drawBook(g, G, sel) {
+  function drawBook(g: Ctx, G: { stickers: string[] }, sel: number) {
     const W = g.canvas.width, H = g.canvas.height;
     g.fillStyle = 'rgba(40,25,50,.6)'; g.fillRect(0, 0, W, H);
     const S = Entities.STICKERS;
@@ -330,7 +349,7 @@ const UI = (() => {
   }
 
   // ---------------- journal ----------------
-  function drawJournal(g, G) {
+  function drawJournal(g: Ctx, G: GView) {
     const W = g.canvas.width, H = g.canvas.height;
     g.fillStyle = 'rgba(40,25,50,.6)'; g.fillRect(0, 0, W, H);
     panel(g, W / 2 - 330, 40, 660, 640, '#fff6e8', '#e0b8d0');
@@ -371,7 +390,7 @@ const UI = (() => {
 
   // ---------------- area map ----------------
   // a soft storybook palette: every tile char maps to a little patch of colour
-  const MAP_COLORS = {
+  const MAP_COLORS: Record<string, string> = {
     '.': '#a9de7c', ',': '#9fd673', "'": '#a4da76',     // grass tufts
     ';': '#dad4c6', ':': '#c3bcac',                      // city pavement / avenue
     '!': '#c3bcac', '+': '#c3bcac',                      // upright road / crossing
@@ -398,22 +417,22 @@ const UI = (() => {
     '"': '#ffd479', '{': '#fdfdf8', '(': '#caa07a',
   };
   // doors, the bus stops and interior exits get a little name tag
-  const PLACE_NAMES = {
+  const PLACE_NAMES: Record<string, string> = {
     H: 'Home', S: 'School', P: 'Pool', C: 'Sweets', L: 'Ballet',
     R: 'Library', O: 'Toys', K: 'Bakery', X: 'Barn', '0': 'Art',
     B: 'Bus stop', '6': 'Beach bus', '7': 'Farm bus', x: 'Door',
   };
   const PLACE_CHARS = 'HSPCLROKX0B67x';
 
-  function tagPill(g, label, cx, cy, col, bg) {
+  function tagPill(g: Ctx, label: string, cx: number, cy: number, col?: string, bg?: string) {
     g.font = FONT(13);
     const w = g.measureText(label).width + 14;
     rr(g, cx - w / 2, cy - 17, w, 16, 8);
     g.fillStyle = bg || 'rgba(255,250,240,.9)'; g.fill();
     text(g, label, cx, cy - 9, 13, col || '#6a4a5a', 'center');
   }
-  function heading(g, cx, cy, dir) {
-    const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir] || [0, 1];
+  function heading(g: Ctx, cx: number, cy: number, dir: string) {
+    const d = ({ up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as Record<string, [number, number]>)[dir] || [0, 1];
     g.save(); g.translate(cx, cy); g.rotate(Math.atan2(d[1], d[0]));
     g.fillStyle = '#b85c8a';
     g.beginPath(); g.moveTo(17, 0); g.lineTo(9, -5); g.lineTo(9, 5); g.closePath(); g.fill();
@@ -421,7 +440,7 @@ const UI = (() => {
   }
 
   // info: { map, px, py, dir, t, npcs:[{x,y,friend}] }
-  function drawMap(g, info) {
+  function drawMap(g: Ctx, info: { map: string; px: number; py: number; dir: string; t: number; npcs: { x: number; y: number; friend: boolean }[] }) {
     const W = g.canvas.width, H = g.canvas.height;
     g.fillStyle = 'rgba(40,25,50,.6)'; g.fillRect(0, 0, W, H);
     const m = Maps.get(info.map), rows = m.rows;

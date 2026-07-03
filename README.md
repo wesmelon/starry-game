@@ -12,13 +12,18 @@ her big red barn).
 Everything is generated in code: all pixel art is drawn procedurally on
 canvas, and the entire soundtrack (7 original chiptune songs + sound effects)
 is synthesized live with the Web Audio API. No images, no audio files, no
-dependencies, no build step.
+runtime dependencies — the game is written in TypeScript and ships as a
+single bundled script.
 
 ## How to run
 
-Just open `index.html` in any modern browser — it works straight from disk:
+Build once, then open `index.html` in any modern browser — it works
+straight from disk:
 
 ```
+npm install
+npm run build
+
 # Linux
 xdg-open index.html
 
@@ -171,13 +176,21 @@ Beyond the classes, Starview Meadow is full of toddler-sized fun:
 
 ## Development
 
-No tooling needed. The code is plain script-tag JavaScript: `audio.js`,
-`sprites.js`, `maps.js`, `entities.js`, `minigames.js`, `ui.js`, `main.js`,
-each exposing one global.
-
-A headless data validator checks map geometry, warps, NPC schedules, song
-note data, sprite templates, and sticker definitions:
+The game is strict-mode TypeScript in `src/` — `audio.ts`, `sprites.ts`,
+`maps.ts`, `entities.ts`, `minigames.ts`, `ui.ts`, `main.ts`, plus shared
+types in `types.ts`. esbuild bundles `src/main.ts` into `dist/game.js`,
+which is the only script `index.html` loads.
 
 ```
-node dev/check.js
+npm run build       # typecheck (tsc --noEmit) + bundle
+npm run watch       # rebuild the bundle on every save
+npm run typecheck   # types only
+npm run check       # build, then run both validators below
 ```
+
+Two headless validators run against the built bundle (no browser needed):
+
+- `node dev/check.js` — data checks: map geometry, warps, NPC schedules,
+  song note data, sprite templates, sticker definitions.
+- `node dev/smoke.js` — boots the whole game with a stubbed canvas, plays
+  every minigame to completion, and mashes keys in the live game loop.

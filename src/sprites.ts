@@ -4,13 +4,16 @@
    and painter functions. No image files.
    ====================================================================== */
 
-const SpriteLib = (() => {
+type Ctx = CanvasRenderingContext2D;
+interface CharDef { kind: string; pal: Record<string, string>; }
+
+export const SpriteLib = (() => {
   const TILE = 16, SCALE = 3;
 
   // ---------- character pixel templates ----------
   // chars: . none | H hair | S skin | E eye | R blush | D dress | d dress dark
   //        P pigtail/bun accent | T shirt | O shorts | B shoes | A apron | W white
-  const GIRL = {
+  const GIRL: Record<string, string[]> = {
     down: [
       '..HHHHHHHH..',
       '.HHHHHHHHHH.',
@@ -51,12 +54,12 @@ const SpriteLib = (() => {
       '.DDDDDDDDDD.',
     ],
   };
-  const BOY_BOTTOM = {
+  const BOY_BOTTOM: Record<string, string[]> = {
     down: ['...TTTTTT...', '..TTTTTTTT..', '..OOOOOOOO..', '...OO..OO...'],
     up:   ['...TTTTTT...', '..TTTTTTTT..', '..OOOOOOOO..', '...OO..OO...'],
     left: ['...TTTTTT...', '..TTTTTTTT..', '..OOOOOOOO..', '....OO.OO...'],
   };
-  const ADULT = {
+  const ADULT: Record<string, string[]> = {
     down: [
       '....PPPP....',
       '..HHHHHHHH..',
@@ -110,7 +113,7 @@ const SpriteLib = (() => {
     ],
   };
   // leg frames: [idle, stepA, stepB]
-  const LEGS = {
+  const LEGS: Record<string, string[][]> = {
     front: [
       ['...SS..SS...', '...SS..SS...', '...BB..BB...'],
       ['...SS..SS...', '...BB..SS...', '.......BB...'],
@@ -123,9 +126,9 @@ const SpriteLib = (() => {
     ],
   };
 
-  const DEFAULTS = { S:'#ffd9b8', E:'#33241c', R:'#f7a8a0', B:'#7a4632', W:'#ffffff' };
+  const DEFAULTS: Record<string, string> = { S:'#ffd9b8', E:'#33241c', R:'#f7a8a0', B:'#7a4632', W:'#ffffff' };
 
-  const CHARDEFS = {
+  const CHARDEFS: Record<string, CharDef> = {
     starry:   { kind:'kid',   pal:{ H:'#7a4a2e', D:'#ff9ec5', d:'#ee7fae', P:'#ff5f9e', B:'#e0567f' } },
     mom:      { kind:'adult', pal:{ H:'#5a3a22', P:'#5a3a22', D:'#8fbfe8', A:'#fff7ee', B:'#8a5a3a' } },
     msbloom:  { kind:'adult', pal:{ H:'#b97a3f', P:'#b97a3f', D:'#a8d8a0', B:'#6a8a5a' } },
@@ -153,11 +156,11 @@ const SpriteLib = (() => {
     '..WWWWWWW.',
     '...WWWW...',
   ];
-  const DUCK_PAL = { W:'#fff8e4', E:'#2a2a2a', O:'#f2a444' };
+  const DUCK_PAL: Record<string, string> = { W:'#fff8e4', E:'#2a2a2a', O:'#f2a444' };
 
   // little critters (face left; mirrored for right). A body, D dark, E eye,
   // W white, P pink
-  const ANIMAL_TPL = {
+  const ANIMAL_TPL: Record<string, string[]> = {
     cat: [
       '.A..A.....',
       '.AAAA..A..',
@@ -215,7 +218,7 @@ const SpriteLib = (() => {
       '..A..A....',
     ],
   };
-  const ANIMAL_PAL = {
+  const ANIMAL_PAL: Record<string, Record<string, string>> = {
     cat:      { A:'#9a9aae', D:'#7a7a8e', E:'#222', W:'#ffffff', P:'#ffb7d2' },
     pup:      { A:'#c89058', D:'#8a5a30', E:'#222', W:'#ffffff', P:'#ffb7d2' },
     bunny:    { W:'#fdfdf8', A:'#fdfdf8', P:'#ffb7d2', E:'#222' },
@@ -225,7 +228,7 @@ const SpriteLib = (() => {
     pig:      { A:'#f7b8c8', P:'#e88aa8', E:'#222' },
   };
 
-  function palColor(pal, ch) {
+  function palColor(pal: Record<string, string>, ch: string): string | null {
     if (ch === '.') return null;
     if (pal[ch] !== undefined) return pal[ch];
     if (ch === 'A' || ch === 'T') return pal.D;
@@ -234,11 +237,11 @@ const SpriteLib = (() => {
     return DEFAULTS[ch] || null;
   }
 
-  function rowsToCanvas(rows, pal, mirror) {
+  function rowsToCanvas(rows: string[], pal: Record<string, string>, mirror?: boolean) {
     const w = 12, h = rows.length;
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
-    const g = c.getContext('2d');
+    const g = c.getContext('2d')!;
     if (mirror) { g.translate(w, 0); g.scale(-1, 1); }
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const col = palColor(pal, rows[y][x]);
@@ -247,10 +250,10 @@ const SpriteLib = (() => {
     return c;
   }
 
-  function buildChar(def) {
+  function buildChar(def: CharDef) {
     let body = def.kind === 'adult' ? ADULT : GIRL;
     const bottom = def.kind === 'boy' ? BOY_BOTTOM : null;
-    const out = {};
+    const out: Record<string, HTMLCanvasElement[]> = {};
     for (const dir of ['down', 'up', 'left', 'right']) {
       const srcDir = dir === 'right' ? 'left' : dir;
       let rows = body[srcDir].slice();
@@ -263,22 +266,22 @@ const SpriteLib = (() => {
   }
 
   // ---------- tile painters ----------
-  function px(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
+  function px(g: Ctx, x: number, y: number, w: number, h: number, col: string) { g.fillStyle = col; g.fillRect(x, y, w, h); }
 
   const GRASS = '#9ad469';
-  function paintGrass(g) {
+  function paintGrass(g: Ctx) {
     px(g, 0, 0, 16, 16, GRASS);
     px(g, 3, 4, 1, 1, '#8cc55e'); px(g, 11, 2, 1, 1, '#a9e078');
     px(g, 7, 9, 1, 1, '#8cc55e'); px(g, 13, 12, 1, 1, '#a9e078');
     px(g, 2, 13, 1, 1, '#8cc55e');
   }
-  function flower(g, x, y, col, f) {
+  function flower(g: Ctx, x: number, y: number, col: string, f?: number) {
     const dy = f ? -1 : 0;
     px(g, x - 1, y + dy, 3, 1, col); px(g, x, y - 1 + dy, 1, 3, col);
     px(g, x, y + dy, 1, 1, '#ffd95f');
   }
 
-  const PAINT = {
+  const PAINT: Record<string, (g: Ctx, f?: number, trim?: string) => void> = {
     '.': paintGrass,
     ',': (g, f) => { paintGrass(g); flower(g, 4, 5, '#ff9ec5', f); flower(g, 11, 11, '#fff5fa', f ? 0 : 1); },
     "'": (g, f) => {
@@ -616,7 +619,7 @@ const SpriteLib = (() => {
     '$': (g) => {  // veggie patch — carrots peeking out of the soil
       px(g, 0, 0, 16, 16, '#b07a45');
       px(g, 0, 5, 16, 1, '#9a6438'); px(g, 0, 11, 16, 1, '#9a6438');
-      const carrot = (x, y) => {
+      const carrot = (x: number, y: number) => {
         px(g, x, y, 2, 2, '#ff8a3a');
         px(g, x, y - 2, 1, 2, '#5a9a3a'); px(g, x + 1, y - 3, 1, 3, '#6fb84a');
       };
@@ -689,24 +692,24 @@ const SpriteLib = (() => {
       px(g, 5, 2, 2, 2, '#ffd95f'); px(g, 8, 2, 2, 2, '#7fb8e8'); px(g, 11, 2, 2, 2, '#9adb7a');
     }),
   };
-  function signpost(g, face) {
+  function signpost(g: Ctx, face: () => void) {
     paintGrass(g);
     px(g, 7, 9, 2, 6, '#a87840');
     px(g, 1, 1, 14, 9, '#c9935c');
     px(g, 2, 2, 12, 7, '#f4e0ae');
     face();
   }
-  function busStop(g, base, light) {
+  function busStop(g: Ctx, base: string, light: string) {
     px(g, 3, 2, 2, 12, '#8a8f98');
     px(g, 1, 2, 9, 5, base); px(g, 1, 2, 9, 1, light);
     px(g, 2, 4, 7, 2, '#fff5fa'); px(g, 3, 5, 1, 1, base); px(g, 6, 5, 1, 1, base);
     px(g, 9, 12, 6, 2, '#c9935c'); px(g, 10, 11, 1, 3, '#a87840'); px(g, 13, 11, 1, 3, '#a87840');
   }
-  function circleFill(g, cx, cy, r, col) {
+  function circleFill(g: Ctx, cx: number, cy: number, r: number, col: string) {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++)
       if (dx * dx + dy * dy <= r * r + 0.5) px(g, cx + dx, cy + dy, 1, 1, col);
   }
-  function paintBikeSide(g) { // faces right; 16x11
+  function paintBikeSide(g: Ctx) { // faces right; 16x11
     circleFill(g, 3, 7, 3, '#4a4a55'); circleFill(g, 3, 7, 1, '#c8c8d8');
     circleFill(g, 12, 7, 3, '#4a4a55'); circleFill(g, 12, 7, 1, '#c8c8d8');
     px(g, 3, 5, 1, 2, '#ff7fb0'); px(g, 4, 4, 7, 1, '#ff7fb0');
@@ -715,29 +718,29 @@ const SpriteLib = (() => {
     px(g, 10, 2, 3, 1, '#5a4458'); px(g, 11, 3, 1, 1, '#ff7fb0');
     px(g, 13, 3, 3, 3, '#c9935c'); px(g, 13, 3, 3, 1, '#a87840');
   }
-  function paintBikeFront(g) { // 8x11
+  function paintBikeFront(g: Ctx) { // 8x11
     px(g, 3, 6, 2, 5, '#4a4a55'); px(g, 3, 8, 2, 1, '#c8c8d8');
     px(g, 1, 2, 6, 1, '#5a4458'); px(g, 3, 3, 2, 3, '#ff7fb0');
     px(g, 2, 4, 4, 2, '#c9935c'); px(g, 2, 4, 4, 1, '#a87840');
   }
-  function roof(g, base, dark) {
+  function roof(g: Ctx, base: string, dark: string) {
     px(g, 0, 0, 16, 16, base);
     px(g, 0, 5, 16, 1, dark); px(g, 0, 10, 16, 1, dark); px(g, 0, 15, 16, 1, dark);
   }
 
-  const DOOR_TRIM = { H:'#ff9ec5', S:'#e87f7f', P:'#7fb8e8', L:'#b89fe0', C:'#8fe0c0',
+  const DOOR_TRIM: Record<string, string> = { H:'#ff9ec5', S:'#e87f7f', P:'#7fb8e8', L:'#b89fe0', C:'#8fe0c0',
                      R:'#8a9ad8', O:'#ffb84f', K:'#ff9ec5', X:'#e88a8a', '0':'#a98cf0' };
   for (const dc of ['H', 'S', 'P', 'L', 'C', 'R', 'O', 'K', 'X', '0']) {
     PAINT[dc] = ((trim) => (g, f) => PAINT.door(g, f, trim))(DOOR_TRIM[dc]);
   }
 
   // ---------- sticker icons (16x16) ----------
-  function star(g, col) {
+  function star(g: Ctx, col: string) {
     px(g, 7, 1, 2, 4, col); px(g, 5, 5, 6, 2, col); px(g, 1, 5, 14, 2, col);
     px(g, 3, 7, 10, 3, col); px(g, 2, 10, 4, 4, col); px(g, 10, 10, 4, 4, col);
     px(g, 6, 10, 4, 2, col);
   }
-  const ICONS = {
+  const ICONS: Record<string, (g: Ctx) => void> = {
     star:  (g) => star(g, '#ffd95f'),
     block: (g) => { px(g,2,2,12,12,'#e87f7f'); px(g,3,3,10,10,'#ffb0b0'); px(g,6,5,1,6,'#fff'); px(g,9,5,1,6,'#fff'); px(g,6,7,4,1,'#fff'); },
     book:  (g) => { px(g,2,2,12,12,'#7fb8e8'); px(g,7,2,2,12,'#5a98c8'); px(g,4,5,2,1,'#fff'); px(g,4,8,2,1,'#fff'); },
@@ -782,17 +785,17 @@ const SpriteLib = (() => {
   };
 
   // ---------- build everything ----------
-  const tiles = [{}, {}];      // [frame][char] -> canvas
-  const chars = {};            // name -> dir -> [3 canvases]
-  const ducks = {};            // 'left'/'right'
-  const icons = {};
-  const animals = {};          // kind -> 'left'/'right'
-  const bikes = {};            // 'side-left' / 'side-right' / 'front'
+  const tiles: Record<string, HTMLCanvasElement>[] = [{}, {}];      // [frame][char] -> canvas
+  const chars: Record<string, Record<string, HTMLCanvasElement[]>> = {};            // name -> dir -> [3 canvases]
+  const ducks: Record<string, HTMLCanvasElement> = {};            // 'left'/'right'
+  const icons: Record<string, HTMLCanvasElement> = {};
+  const animals: Record<string, Record<string, HTMLCanvasElement>> = {};          // kind -> 'left'/'right'
+  const bikes: Record<string, HTMLCanvasElement> = {};            // 'side-left' / 'side-right' / 'front'
 
-  function makeCanvas(w, h, fn) {
+  function makeCanvas(w: number, h: number, fn: (g: Ctx) => void) {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
-    fn(c.getContext('2d'));
+    fn(c.getContext('2d')!);
     return c;
   }
 
@@ -832,13 +835,13 @@ const SpriteLib = (() => {
 
   return {
     TILE, SCALE, build,
-    tile: (ch, f) => tiles[f % 2][ch],
-    chr: (name, dir, f) => chars[name] && chars[name][dir][f],
-    duck: (dir) => ducks[dir],
-    icon: (name) => icons[name],
-    animal: (kind, dir) => animals[kind] && animals[kind][dir],
-    bike: (dir) => dir === 'left' ? bikes['side-left'] : dir === 'right' ? bikes['side-right'] : bikes.front,
-    hasTile: (ch) => PAINT[ch] !== undefined,
+    tile: (ch: string, f: number) => tiles[f % 2][ch],
+    chr: (name: string, dir: string, f: number) => chars[name] && chars[name][dir][f],
+    duck: (dir: string) => ducks[dir],
+    icon: (name: string) => icons[name],
+    animal: (kind: string, dir: string) => animals[kind] && animals[kind][dir],
+    bike: (dir: string) => dir === 'left' ? bikes['side-left'] : dir === 'right' ? bikes['side-right'] : bikes.front,
+    hasTile: (ch: string) => PAINT[ch] !== undefined,
     CHARDEFS,
   };
 })();
