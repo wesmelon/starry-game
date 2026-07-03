@@ -1,6 +1,6 @@
 # Minigame Developer README
 
-This project keeps minigames in `js/minigames.js` behind the `Minigames`
+This project keeps minigames in `src/minigames.ts` behind the `Minigames`
 registry. Callers still use `Minigames.school(done)` or
 `Minigames.create('school', done)`, but each game is implemented as a class.
 
@@ -32,7 +32,7 @@ Quiz-style games can extend `ChoiceQuizMinigame`, which already handles:
 
 ## Registering a game
 
-Add the class in `js/minigames.js`, then register it near the bottom:
+Add the class in `src/minigames.ts`, then register it near the bottom:
 
 ```js
 api.register('bubblepop', BubblePopMinigame);
@@ -45,10 +45,10 @@ Registration adds both:
 
 ## Launching from the world
 
-Scheduled classes use `CLASS_INFO` in `js/main.js` and NPCs with `teaches`.
+Scheduled classes use `CLASS_INFO` in `src/main.ts` and NPCs with `teaches`.
 Free-play minigames use `startFunGame(actor, gameId)` and `FUN_GAME_INFO`.
 
-Add reward metadata in `js/main.js`:
+Add reward metadata in `src/main.ts`:
 
 ```js
 bubblepop: { label: 'Bubble Pop', energy: 8, minutes: 25, minEnergy: 10 },
@@ -85,10 +85,7 @@ the result screen to finish.
 Run:
 
 ```sh
-node --check js/minigames.js
-node --check js/main.js
-node dev/check.js
-node dev/smoke.js
+npm run check   # typecheck + bundle + data checks + smoke test
 ```
 
 ## Design notes

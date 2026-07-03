@@ -3,10 +3,12 @@
    NPCs, schedules, dialogue, ducks, stickers, shop stock, skill ladders.
    ====================================================================== */
 
-const Entities = (() => {
+import type { Npc, Animal, Duck, Sticker, ShopItem, SkillDef } from './types';
+
+export const Entities = (() => {
 
   // where(): G is the live game state {day, hour, dow (0=Mon..6=Sun)}
-  const NPCS = [
+  const NPCS: Npc[] = [
     {
       id: 'mom', name: 'Mom', sprite: 'mom', radius: 1.2,
       where: () => ({ map: 'home', x: 10, y: 5 }),
@@ -141,7 +143,7 @@ const Entities = (() => {
   ];
 
   // little ducks paddling on the town lake
-  const DUCKS = [
+  const DUCKS: Duck[] = [
     { x: 8.5, y: 24.5, dir: 'left', t: 0 },
     { x: 12.5, y: 26.5, dir: 'right', t: 1.7 },
   ];
@@ -149,7 +151,7 @@ const Entities = (() => {
 
   // hungry little critters — each would love one treat a day. `map` says where
   // they live (town strays, plus the city petting zoo).
-  const ANIMALS = [
+  const ANIMALS: Animal[] = [
     { id: 'cat', name: 'Mochi', kind: 'cat', map: 'town', x: 12.5, y: 9.7, sfx: 'meow',
       fed: 'Mochi purrs like a tiny warm motor. Prrrr.',
       happy: 'Mochi is full and happy, doing a big stretchy stretch.',
@@ -200,7 +202,7 @@ const Entities = (() => {
       hungry: 'Hazel the barn cat pads over, tail curled like a question mark...' },
   ];
 
-  const STICKERS = [
+  const STICKERS: Sticker[] = [
     { id: 'firstday',  icon: 'block',  name: 'First Day!',       hint: 'Go to your first school class' },
     { id: 'abc',       icon: 'book',   name: 'Little Reader',    hint: 'Reach Letters level 3' },
     { id: 'scholar',   icon: 'crown',  name: 'Star Pupil',       hint: 'Reach Letters level 5' },
@@ -251,7 +253,7 @@ const Entities = (() => {
     { id: 'artist',    icon: 'medal',  name: 'Starry the Artist',hint: 'Reach Painting level 5' },
   ];
 
-  const SHOP_ITEMS = [
+  const SHOP_ITEMS: ShopItem[] = [
     { id: 'juice',    name: 'Apple Juice',     cost: 2, energy: 25, line: 'Glug glug glug... ahh!' },
     { id: 'icecream', name: 'Strawberry Cone', cost: 3, energy: 40, line: 'Cold nose! Happy tummy!' },
     { id: 'cookie',   name: 'Star Cookie',     cost: 5, energy: 60, line: 'It tastes like a crunchy star!' },
@@ -267,14 +269,14 @@ const Entities = (() => {
     { id: 'storybook',name: 'Picture Book',    cost: 6, toy: true, line: 'A book about a brave little bunny. Again! Again!' },
   ];
 
-  const SKILLS = {
+  const SKILLS: Record<string, SkillDef> = {
     letters: { label: 'Letters', titles: ['Doodler', 'ABC Singer', 'Word Wizkid', 'Story Lover', 'Reading Star'] },
     swim:    { label: 'Swimming', titles: ['Tadpole', 'Splasher', 'Goldfish', 'Flying Fish', 'Little Dolphin'] },
     ballet:  { label: 'Ballet', titles: ['Wobbler', 'Twinkle Toes', 'Twirler', 'Grand Jeté', 'Prima Starrina'] },
     art:     { label: 'Painting', titles: ['Scribbler', 'Crayon Kid', 'Rainbow Maker', 'Color Mixer', 'Little Artist'] },
   };
   const LEVEL_XP = [0, 2, 5, 9, 14]; // xp needed for levels 1..5
-  function skillLevel(xp) {
+  function skillLevel(xp: number) {
     let lvl = 1;
     for (let i = 0; i < LEVEL_XP.length; i++) if (xp >= LEVEL_XP[i]) lvl = i + 1;
     return lvl;

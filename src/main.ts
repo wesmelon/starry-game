@@ -3,31 +3,77 @@
    Game loop, world simulation, schedule, rewards, save/load, rendering.
    ====================================================================== */
 
-const Game = (() => {
+import { AudioSys } from './audio';
+import { SpriteLib } from './sprites';
+import { Maps } from './maps';
+import { Entities } from './entities';
+import { Minigames } from './minigames';
+import { UI } from './ui';
+import type { ChoiceOpt } from './ui';
+import type { Animal, Dir, Minigame, Npc, Warp } from './types';
+
+interface GState {
+  day: number; tmin: number; stars: number; energy: number;
+  skills: Record<string, number>;
+  hearts: Record<string, number>;
+  stickers: string[];
+  duckFood: number;
+  treats: number;
+  toys: string[];
+  fedDay: Record<string, number>;
+  done: Record<string, boolean>;
+  talked: Record<string, number>;
+  counts: Record<string, number>;
+  fun: Record<string, number>;
+  flags: Record<string, boolean>;
+}
+interface NpcState {
+  map: string; x: number; y: number; dir: Dir;
+  homeX: number; homeY: number; wT: number; animT: number;
+  moving: boolean; pauseT: number;
+  tx: number | null; ty: number | null;
+}
+interface Anim {
+  type: string; t: number; dur: number;
+  tx: number; ty: number; ox: number; oy: number;
+  after?: () => void;
+  fired: Record<string, boolean>;
+  land?: { x: number; y: number };
+  ang?: number;
+  lastHop?: number;
+}
+interface Part {
+  kind: string; x: number; y: number; vx: number; vy: number;
+  t: number; dur: number; r?: number;
+}
+interface Cam { x: number; y: number; }
+type AnimState = { a: Animal; x: number; y: number; t: number; dir: Dir };
+
+export const Game = (() => {
 
   const T = SpriteLib.TILE * SpriteLib.SCALE; // 48 px per tile
   const SAVE_KEY = 'starry-little-days';
   const MIN_PER_SEC = 2;        // 1 real second = 2 game minutes
   const DAY_START = 7 * 60, DAY_END = 22 * 60;
 
-  let canvas, ctx;
+  let canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D;
   let state = 'title';          // title | play | minigame | book | journal | map | summary
   let titleStarted = false, titleSel = 0;
   let audioReady = false;
   let time = 0, last = 0;
-  let mg = null;                // active minigame
+  let mg: Minigame | null = null;   // active minigame
   let bookSel = 0;
-  let fade = null;              // {t, dur, mid, fired}
+  let fade: { t: number; dur: number; mid: () => void; fired: boolean } | null = null;
   let locT = 0, locLabel = '';
-  let summaryInfo = null, summaryT = 0;
+  let summaryInfo: { day: number; lines: string[] } | null = null, summaryT = 0;
   let prevTmin = 0;
   let stepT = 0;
-  let anim = null;              // {type, t, dur, tx, ty, ox, oy, after, fired}
-  const parts = [];             // sparkles & bubbles
+  let anim: Anim | null = null;     // the little play cutscene, when one is running
+  const parts: Part[] = [];         // sparkles & bubbles
 
   // ---------- persistent state ----------
-  let G = null;
-  function freshG() {
+  let G: GState = freshG();
+  function freshG(): GState {
     return {
       day: 1, tmin: DAY_START, stars: 0, energy: 100,
       skills: { letters: 0, swim: 0, ballet: 0, art: 0 },
@@ -42,16 +88,17 @@ const Game = (() => {
   function hour() { return G.tmin / 60; }
   function gview() { return { day: G.day, dow: dow(), hour: hour(), tmin: G.tmin, stars: G.stars, energy: G.energy, skills: G.skills, hearts: G.hearts, stickers: G.stickers, duckFood: G.duckFood, treats: G.treats }; }
 
-  let stats = { stars: 0, lines: [] };
+  let stats: { stars: number; lines: string[] } = { stars: 0, lines: [] };
 
   // ---------- player & npcs ----------
-  const player = { map: 'home', x: 4.5, y: 6.6, dir: 'down', moving: false, animT: 0, swimming: false, riding: false };
+  const player: { map: string; x: number; y: number; dir: Dir; moving: boolean; animT: number; swimming: boolean; riding: boolean } =
+    { map: 'home', x: 4.5, y: 6.6, dir: 'down', moving: false, animT: 0, swimming: false, riding: false };
   const BIKE_HOME = { x: 12.5, y: 6.8 };
   const bike = { x: BIKE_HOME.x, y: BIKE_HOME.y };   // lives on the town map
   let waterHintT = 0;
-  const npcState = {};   // id -> {map,x,y,dir,homeX,homeY,wT,animT,moving,pauseT}
+  const npcState: Record<string, NpcState> = {};
   // critters drift gently around their home spot on the town map
-  const animState = Entities.ANIMALS.map(a => ({ a, x: a.x, y: a.y, t: (a.x * 7) % 6, dir: 'left' }));
+  const animState: AnimState[] = Entities.ANIMALS.map(a => ({ a, x: a.x, y: a.y, t: (a.x * 7) % 6, dir: 'left' as Dir }));
 
   function placeNPCs() {
     const gv = gview();
@@ -75,7 +122,7 @@ const Game = (() => {
   function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
   function load() {
     try {
-      const raw = JSON.parse(localStorage.getItem(SAVE_KEY));
+      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
       if (!raw || !raw.G) return false;
       G = Object.assign(freshG(), raw.G);
       G.skills = Object.assign({ letters: 0, swim: 0, ballet: 0, art: 0 }, raw.G.skills);
@@ -87,20 +134,21 @@ const Game = (() => {
   }
 
   // ---------- helpers ----------
-  function fadeTo(mid) { fade = { t: 0, dur: 0.45, mid, fired: false }; }
-  function setLocation(label) { locLabel = label; locT = 2.4; }
-  function award(id) {
+  function fadeTo(mid: () => void) { fade = { t: 0, dur: 0.45, mid, fired: false }; }
+  function setLocation(label: string) { locLabel = label; locT = 2.4; }
+  function award(id: string) {
     if (G.stickers.includes(id)) return;
     const st = Entities.STICKERS.find(s => s.id === id);
+    if (!st) return;
     G.stickers.push(id);
     stats.lines.push('New sticker: ' + st.name);
     UI.toast('New sticker: ' + st.name + '!', st.icon);
     AudioSys.sfx('sticker');
   }
-  function gainStars(n) { G.stars += n; stats.stars += n; }
+  function gainStars(n: number) { G.stars += n; stats.stars += n; }
   // a little play activity: the first time each day it gives stars (and/or a
   // snack of energy); after that it's just for fun. Returns true the first time.
-  function funReward(id, stars, energy) {
+  function funReward(id: string, stars: number, energy?: number) {
     const first = G.fun[id] !== G.day;
     if (first) {
       G.fun[id] = G.day;
@@ -116,10 +164,10 @@ const Game = (() => {
     if (m.outdoor) return (hour() >= 19.5 || hour() < 6.5) ? 'night' : (m.music || 'meadow');
     return m.music || 'meadow';
   }
-  function crossed(min) { return prevTmin < min && G.tmin >= min; }
+  function crossed(min: number) { return prevTmin < min && G.tmin >= min; }
 
   // ---------- class logic ----------
-  const CLASS_INFO = {
+  const CLASS_INFO: Record<string, { label: string; skill: string; firstSticker: string; prompt: string; days: number[]; from: number; to: number }> = {
     school: { label: 'School', skill: 'letters', firstSticker: 'firstday',
               prompt: 'Good morning, Starry! Ready for circle time?',
               days: [0, 1, 2, 3, 4], from: 8, to: 11.5 },
@@ -133,15 +181,15 @@ const Game = (() => {
               prompt: 'The paints are ready! Shall we make something colorful?',
               days: [5, 6], from: 9, to: 11.5 },
   };
-  function classAvailable(type) {
+  function classAvailable(type: string) {
     const c = CLASS_INFO[type];
     return c.days.includes(dow()) && hour() >= c.from && hour() < c.to && !G.done[type];
   }
-  function startClass(type) {
+  function startClass(type: string) {
     state = 'minigame';
-    mg = Minigames[type]((stars, perfect) => endClass(type, stars, perfect));
+    mg = Minigames[type]((stars: number, perfect: boolean) => endClass(type, stars, perfect));
   }
-  function endClass(type, stars, perfect) {
+  function endClass(type: string, stars: number, perfect: boolean) {
     const c = CLASS_INFO[type];
     const total = stars + (perfect ? 1 : 0);
     gainStars(total);
@@ -159,10 +207,10 @@ const Game = (() => {
     if (after > before) {
       const sk = Entities.SKILLS[c.skill];
       UI.toast(sk.label + ' is now Lv ' + after + ': ' + sk.titles[after - 1] + '!', 'medal');
-      const milestones = {
+      const milestones = ({
         letters: { 3: 'abc', 5: 'scholar' }, swim: { 3: 'goldfish', 5: 'dolphin' },
         ballet: { 3: 'tutu', 5: 'prima' }, art: { 3: 'rainbow', 5: 'artist' },
-      }[c.skill];
+      } as Record<string, Record<number, string>>)[c.skill];
       if (milestones && milestones[after]) award(milestones[after]);
     }
     mg = null;
@@ -170,20 +218,20 @@ const Game = (() => {
   }
 
   // ---------- shop ----------
-  const TOY_ICONS = { teddy: 'teddy', froggy: 'froggy', bball: 'ball', storybook: 'book' };
-  function storyTime(npc) {
+  const TOY_ICONS: Record<string, string> = { teddy: 'teddy', froggy: 'froggy', bball: 'ball', storybook: 'book' };
+  function storyTime(npc: Npc) {
     const lines = npc.talk(gview()) || [];
     UI.say(npc.name, [lines[G.day % Math.max(1, lines.length)] || '...!']);
     funReward('story', 1);
     award('story');
     AudioSys.sfx('note', 'C5');
   }
-  function openShop(npc) {
+  function openShop(npc: Npc) {
     const ids = npc.stock || Entities.SHOP_ITEMS.map(i => i.id);
     const stock = ids.map(id => Entities.SHOP_ITEMS.find(i => i.id === id))
-      .filter(Boolean)
+      .filter((it): it is NonNullable<typeof it> => !!it)
       .filter(it => !(it.toy && G.toys.includes(it.id)));   // each toy comes home once
-    const opts = stock.map(it => ({ label: it.name + '  (' + it.cost + '★)', value: it.id }));
+    const opts: ChoiceOpt[] = stock.map(it => ({ label: it.name + '  (' + it.cost + '★)', value: it.id }));
     if (npc.story) opts.push({ label: 'Read a story ♪', value: '__story' });
     opts.push({ label: 'Just looking!', value: null });
     const who = npc.shopName || npc.name;
@@ -191,6 +239,7 @@ const Game = (() => {
       if (val === '__story') return storyTime(npc);
       if (!val) return;
       const it = Entities.SHOP_ITEMS.find(i => i.id === val);
+      if (!it) return;
       if (G.stars < it.cost) {
         UI.say(who, ['Oh dear, that needs ' + it.cost + ' stars. Earn some shiny ones in class!']);
         AudioSys.sfx('deny');
@@ -211,7 +260,7 @@ const Game = (() => {
         AudioSys.sfx('pop');
         UI.say('Starry', [it.line]);
       } else {
-        G.energy = Math.min(100, G.energy + it.energy);
+        G.energy = Math.min(100, G.energy + (it.energy || 0));
         AudioSys.sfx('munch');
         award(npc.bakery ? 'baker' : 'sweet');
         UI.say('Starry', [it.line]);
@@ -221,7 +270,7 @@ const Game = (() => {
   }
 
   // ---------- just-for-fun minigames ----------
-  const FUN_GAME_INFO = {
+  const FUN_GAME_INFO: Record<string, { label: string; energy: number; minutes: number; minEnergy: number }> = {
     shells:  { label: 'Shell Splash', energy: 12, minutes: 40, minEnergy: 15 },
     veggies: { label: 'Veggie Round-up', energy: 12, minutes: 40, minEnergy: 15 },
     math:    { label: 'Number Time', energy: 0, minutes: 20, minEnergy: 0 },
@@ -229,20 +278,20 @@ const Game = (() => {
     balloonbop: { label: 'Balloon Bop', energy: 8, minutes: 25, minEnergy: 10 },
     hopscotch:  { label: 'Hopscotch Hero', energy: 8, minutes: 25, minEnergy: 10 },
   };
-  function funGameInfo(game) {
+  function funGameInfo(game: string) {
     return FUN_GAME_INFO[game] || { label: game, energy: 12, minutes: 40, minEnergy: 15 };
   }
-  function startFunGame(npc, game) {
-    game = game || npc.game;
+  function startFunGame(npc: { name: string; game?: string }, game?: string) {
+    game = game || npc.game || '';
     const info = funGameInfo(game);
     if (G.energy < info.minEnergy) {
       UI.say(npc.name, ['Ooh, those are sleepy eyes! Have a little snack or a nap first.']);
       return;
     }
     state = 'minigame';
-    mg = Minigames[game]((stars, perfect) => endFunGame(npc, game, stars, perfect));
+    mg = Minigames[game]((stars: number, perfect: boolean) => endFunGame(npc, game!, stars, perfect));
   }
-  function endFunGame(npc, game, stars, perfect) {
+  function endFunGame(npc: { name: string; game?: string }, game: string, stars: number, perfect: boolean) {
     const info = funGameInfo(game);
     const total = stars + (perfect ? 1 : 0);
     G.energy = Math.max(0, G.energy - info.energy);
@@ -261,7 +310,7 @@ const Game = (() => {
   }
 
   // ---------- sleeping ----------
-  function goToSleep(napOnly) {
+  function goToSleep(napOnly: boolean) {
     AudioSys.sfx('sleep');
     fadeTo(() => {
       if (napOnly) {
@@ -298,20 +347,20 @@ const Game = (() => {
   // when Starry uses the slide, swings, see-saw, carousel, hopscotch or
   // pony, a tiny cutscene takes over her position for a few seconds and
   // then hands back control (rewards & dialogue fire when it finishes).
-  function sparkles(x, y) {
+  function sparkles(x: number, y: number) {
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI * 2 + Math.random();
       parts.push({ kind: 'spark', x, y, vx: Math.cos(a) * 1.6, vy: Math.sin(a) * 1.1 - 1.4, t: 0, dur: 0.6 });
     }
   }
-  function bubbles(x, y) {
+  function bubbles(x: number, y: number) {
     for (let i = 0; i < 8; i++) {
       parts.push({ kind: 'bub', x: x + (Math.random() - 0.5) * 0.8, y: y - Math.random() * 0.4,
                    vx: (Math.random() - 0.5) * 0.5, vy: -0.9 - Math.random() * 0.8,
                    t: 0, dur: 1.2 + Math.random() * 0.6, r: 3 + Math.random() * 5 });
     }
   }
-  function updateParts(dt) {
+  function updateParts(dt: number) {
     for (let i = parts.length - 1; i >= 0; i--) {
       const p = parts[i];
       p.t += dt;
@@ -320,7 +369,7 @@ const Game = (() => {
       if (p.t >= p.dur) parts.splice(i, 1);
     }
   }
-  function drawParts(cam) {
+  function drawParts(cam: Cam) {
     for (const p of parts) {
       const a = Math.max(0, 1 - p.t / p.dur);
       const x = p.x * T - cam.x, y = p.y * T - cam.y;
@@ -330,28 +379,31 @@ const Game = (() => {
       } else {
         ctx.strokeStyle = `rgba(215,240,255,${(a * 0.9).toFixed(2)})`;
         ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(x, y, p.r, 0, 7); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, p.r || 4, 0, 7); ctx.stroke();
       }
     }
   }
 
-  function landSpot(cands) {
+  function landSpot(cands: [number, number][]) {
     for (const [x, y] of cands)
       if (!Maps.isSolid(player.map, Math.floor(x), Math.floor(y)) &&
           !Maps.isWater(player.map, Math.floor(x), Math.floor(y))) return { x, y };
     return { x: cands[cands.length - 1][0], y: cands[cands.length - 1][1] };
   }
-  function startAnim(type, f, dur, after) {
+  function startAnim(type: string, f: { x: number; y: number }, dur: number, after?: () => void) {
     held.clear();
     player.moving = false;
     anim = { type, t: 0, dur, tx: f.x, ty: f.y, ox: player.x, oy: player.y, after, fired: {} };
   }
-  function cue(id, at, fn) { if (!anim.fired[id] && anim.t >= at) { anim.fired[id] = true; fn(); } }
-  const lerp = (a, b, p) => a + (b - a) * p;
-  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  function cue(id: string, at: number, fn: () => void) {
+    if (!anim || anim.fired[id] || anim.t < at) return;
+    anim.fired[id] = true; fn();
+  }
+  const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-  function updateAnim(dt) {
-    const a = anim;
+  function updateAnim(dt: number) {
+    const a = anim!;
     a.t += dt;
     const p = clamp01(a.t / a.dur);
     if (a.type === 'slide') {
@@ -373,7 +425,7 @@ const Game = (() => {
         player.x = a.land.x;
         player.y = a.land.y - Math.abs(Math.sin((p - 0.7) / 0.3 * Math.PI)) * 0.25;
         player.dir = 'down';
-        cue('l', a.dur * 0.7, () => { AudioSys.sfx('pop'); sparkles(a.land.x, a.land.y - 0.3); });
+        cue('l', a.dur * 0.7, () => { AudioSys.sfx('pop'); sparkles(a.land!.x, a.land!.y - 0.3); });
         if (p >= 1) player.y = a.land.y;
       }
     } else if (a.type === 'swing') {
@@ -438,7 +490,7 @@ const Game = (() => {
   }
 
   // ---------- interaction ----------
-  const FLAVOR = {
+  const FLAVOR: Record<string, string[]> = {
     k: ['Something smells yummy in the kitchen.'],
     m: ['So many picture books and bright little things!'],
     A: ['The board says: A is for Apple. And Adventure!'],
@@ -470,13 +522,13 @@ const Game = (() => {
 
   function facingTile() {
     const tx = Math.floor(player.x), ty = Math.floor(player.y - 0.1);
-    const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[player.dir];
+    const d = ({ up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as Record<Dir, [number, number]>)[player.dir];
     return { x: tx + d[0], y: ty + d[1] };
   }
-  function npcNearFace() {
+  function npcNearFace(): Npc | null {
     const f = facingTile();
     const fx = f.x + 0.5, fy = f.y + 0.5;
-    let best = null, bd = 1.45;
+    let best: Npc | null = null, bd = 1.45;
     for (const n of Entities.NPCS) {
       const ns = npcState[n.id];
       if (!ns || ns.map !== player.map) continue;
@@ -486,8 +538,8 @@ const Game = (() => {
     return best;
   }
 
-  function animalNear() {
-    let best = null, bd = 1.5;
+  function animalNear(): AnimState | null {
+    let best: AnimState | null = null, bd = 1.5;
     for (const s of animState) {
       if (s.a.map !== player.map) continue;
       const dd = Math.hypot(s.x - player.x, s.y - player.y);
@@ -504,7 +556,7 @@ const Game = (() => {
     bike.x = player.x; bike.y = player.y;
     AudioSys.sfx('bell');
   }
-  function feedAnimal(s) {
+  function feedAnimal(s: AnimState) {
     const a = s.a;
     AudioSys.sfx(a.sfx);
     if (G.fedDay[a.id] === G.day) { UI.say(a.name, [a.happy]); return; }
@@ -540,7 +592,7 @@ const Game = (() => {
     if (ch === 'b' || ch === 'v') {
       // Starry can snuggle in any time — a quick nap, or sleep the whole
       // day away and wake up to a brand new one.
-      const opts = [];
+      const opts: ChoiceOpt[] = [];
       if (hour() < 20) opts.push({ label: 'Just a nap', value: 'nap' });
       opts.push({ label: hour() >= 18 ? 'Goodnight! ☆' : 'Sleep until tomorrow ☆', value: 'sleep' });
       opts.push({ label: 'Not yet', value: null });
@@ -737,7 +789,7 @@ const Game = (() => {
     if (FLAVOR[ch]) UI.say('', FLAVOR[ch]);
   }
 
-  function talkTo(npc) {
+  function talkTo(npc: Npc) {
     const ns = npcState[npc.id];
     // face each other
     ns.pauseT = 2.5;
@@ -746,7 +798,7 @@ const Game = (() => {
     const freeGames = npc.freeGames || [];
     if (npc.teaches && classAvailable(npc.teaches)) {
       const c = CLASS_INFO[npc.teaches];
-      const opts = [{ label: "Let's go!", value: 'class' }];
+      const opts: ChoiceOpt[] = [{ label: "Let's go!", value: 'class' }];
       for (const game of freeGames) opts.push({ label: game.label || funGameInfo(game.game).label, value: game.game });
       opts.push({ label: 'Not yet', value: null });
       UI.choose(npc.name, c.prompt, opts, v => {
@@ -755,13 +807,13 @@ const Game = (() => {
             UI.say(npc.name, ['Oh my, those are sleepy eyes! Have a snack or a nap first, little one.']);
             return;
           }
-          startClass(npc.teaches);
+          startClass(npc.teaches!);
         } else if (v) startFunGame(npc, v);
       });
       return;
     }
     if (freeGames.length) {
-      const opts = freeGames.map(game => ({ label: game.label || funGameInfo(game.game).label, value: game.game }));
+      const opts: ChoiceOpt[] = freeGames.map(game => ({ label: game.label || funGameInfo(game.game).label, value: game.game }));
       opts.push({ label: 'Just saying hi', value: 'hi' });
       UI.choose(npc.name, npc.freeGamePrompt || 'What shall we play?', opts, v => {
         if (v === 'hi') chatWith(npc);
@@ -770,7 +822,7 @@ const Game = (() => {
       return;
     }
     if (npc.game) {
-      UI.choose(npc.name, npc.gamePrompt, [
+      UI.choose(npc.name, npc.gamePrompt || 'Want to play?', [
         { label: "Let's play!", value: 'play' },
         { label: 'Just saying hi', value: 'hi' },
       ], v => {
@@ -782,7 +834,7 @@ const Game = (() => {
     chatWith(npc);
   }
 
-  function chatWith(npc) {
+  function chatWith(npc: Npc) {
     const gv = gview();
     let lines = npc.talk(gv) || [];
     if (npc.id !== 'mom' && lines.length > 1) lines = [lines[G.day % lines.length]];
@@ -803,7 +855,7 @@ const Game = (() => {
   }
 
   // ---------- movement ----------
-  const held = new Set();
+  const held = new Set<string>();
   function moveDir() {
     let dx = 0, dy = 0;
     if (held.has('left')) dx -= 1;
@@ -813,7 +865,7 @@ const Game = (() => {
     return { dx, dy };
   }
   function canSwim() { return G.skills.swim >= 1; }
-  function blocked(x, y) {
+  function blocked(x: number, y: number) {
     const hw = 0.27;
     for (const [ox, oy] of [[-hw, -0.35], [hw, -0.35], [-hw, 0.02], [hw, 0.02]]) {
       const tx = Math.floor(x + ox), ty = Math.floor(y + oy);
@@ -823,7 +875,7 @@ const Game = (() => {
     }
     return false;
   }
-  function updatePlayer(dt) {
+  function updatePlayer(dt: number) {
     const { dx, dy } = moveDir();
     const speed = (player.riding ? 7.0 : player.swimming ? 2.6 : G.energy < 20 ? 2.4 : 4.0) * dt;
     player.moving = !!(dx || dy);
@@ -865,14 +917,14 @@ const Game = (() => {
       if (onWater && player.map === 'town') award('paddler');
     }
   }
-  function doWarp(w) {
+  function doWarp(w: Warp) {
     held.clear();
     fadeTo(() => {
       player.map = w.map;
       player.x = w.x + 0.5;
       player.y = w.y + 0.85;
       player.dir = w.dir;
-      const trip = { city: 'citytrip', beach: 'beachtrip', farm: 'farmtrip' }[w.map];
+      const trip = ({ city: 'citytrip', beach: 'beachtrip', farm: 'farmtrip' } as Record<string, string>)[w.map];
       if (trip) award(trip);
       setLocation(Maps.get(w.map).label);
     });
@@ -881,7 +933,7 @@ const Game = (() => {
     return player.moving ? 1 + Math.floor(player.animT * 6) % 2 : 0;
   }
 
-  function updateNPCs(dt) {
+  function updateNPCs(dt: number) {
     placeNPCs();
     for (const n of Entities.NPCS) {
       const ns = npcState[n.id];
@@ -896,7 +948,7 @@ const Game = (() => {
           ns.ty = ns.homeY + (Math.random() * 2 - 1) * n.radius * 0.7;
         } else { ns.tx = null; }
       }
-      if (ns.tx !== null && ns.tx !== undefined) {
+      if (ns.tx != null && ns.ty != null) {
         const ddx = ns.tx - ns.x, ddy = ns.ty - ns.y;
         const dist = Math.hypot(ddx, ddy);
         if (dist > 0.08) {
@@ -910,7 +962,7 @@ const Game = (() => {
     }
   }
 
-  function updateAnimals(dt) {
+  function updateAnimals(dt: number) {
     for (const s of animState) {
       s.t += dt;
       const vx = Math.sin(s.t * 0.5 + 1) * 0.2;
@@ -922,7 +974,7 @@ const Game = (() => {
     }
   }
 
-  function updateDucks(dt) {
+  function updateDucks(dt: number) {
     for (const d of Entities.DUCKS) {
       d.t += dt;
       const vx = Math.sin(d.t * 0.4) * 0.25;
@@ -936,7 +988,7 @@ const Game = (() => {
   }
 
   // ---------- world clock ----------
-  function updateClock(dt) {
+  function updateClock(dt: number) {
     prevTmin = G.tmin;
     G.tmin += dt * MIN_PER_SEC;
     const d = dow();
@@ -956,7 +1008,7 @@ const Game = (() => {
   }
 
   // ---------- update ----------
-  function update(dt) {
+  function update(dt: number) {
     UI.toastUpdate(dt);
     if (fade) {
       fade.t += dt;
@@ -1018,14 +1070,14 @@ const Game = (() => {
     }
     // toys Starry bought sit out on her bedroom floor
     if (player.map === 'home' && G.toys.length) {
-      const TOY_SPOTS = { teddy: [2.4, 3.6], froggy: [3.4, 4.3], bball: [2.2, 5.0], storybook: [3.7, 3.3] };
+      const TOY_SPOTS: Record<string, [number, number]> = { teddy: [2.4, 3.6], froggy: [3.4, 4.3], bball: [2.2, 5.0], storybook: [3.7, 3.3] };
       for (const id of G.toys) {
         const s = TOY_SPOTS[id], ic = SpriteLib.icon(TOY_ICONS[id]);
         if (s && ic) ctx.drawImage(ic, Math.floor(s[0] * T - 15 - cam.x), Math.floor(s[1] * T - 15 - cam.y), 30, 30);
       }
     }
     // entities sorted by y
-    const ents = [];
+    const ents: { y: number; draw: () => void }[] = [];
     for (const n of Entities.NPCS) {
       const ns = npcState[n.id];
       if (ns && ns.map === player.map)
@@ -1072,7 +1124,7 @@ const Game = (() => {
     UI.drawTint(ctx, G.tmin, !!map.outdoor);
   }
 
-  function drawPlayer(cam) {
+  function drawPlayer(cam: Cam) {
     const sx = player.x * T - cam.x, sy = player.y * T - cam.y;
     if (player.swimming) {
       const c = SpriteLib.chr('starry', player.dir, 0);
@@ -1102,7 +1154,7 @@ const Game = (() => {
     drawChar('starry', { x: player.x, y: player.y, dir: player.dir, moving: player.moving, animT: player.animT }, cam, playerFrame());
   }
 
-  function drawAnimal(s, cam) {
+  function drawAnimal(s: AnimState, cam: Cam) {
     const c = SpriteLib.animal(s.a.kind, s.dir);
     const w = c.width * SpriteLib.SCALE, h = c.height * SpriteLib.SCALE;
     const bob = Math.sin(s.t * 2.5) * 1.5;
@@ -1119,9 +1171,9 @@ const Game = (() => {
     }
   }
 
-  function drawChar(sprite, ns, cam, forcedFrame) {
+  function drawChar(sprite: string, ns: { x: number; y: number; dir: string; moving?: boolean; animT?: number }, cam: Cam, forcedFrame?: number) {
     const frame = forcedFrame !== undefined ? forcedFrame
-      : (ns.moving ? 1 + Math.floor(ns.animT * 6) % 2 : 0);
+      : (ns.moving ? 1 + Math.floor((ns.animT || 0) * 6) % 2 : 0);
     const c = SpriteLib.chr(sprite, ns.dir, frame);
     if (!c) return;
     const w = c.width * SpriteLib.SCALE, h = c.height * SpriteLib.SCALE;
@@ -1133,7 +1185,7 @@ const Game = (() => {
     ctx.drawImage(c, sx, sy, w, h);
   }
 
-  const BFLY = {
+  const BFLY: Record<string, { x: number; y: number; c: string; p: number }[]> = {
     town: [
       { x: 6.5, y: 9.5, c: '#ff9ec5', p: 0 }, { x: 14.5, y: 4.5, c: '#cdb0ee', p: 2.1 },
       { x: 24.5, y: 9.0, c: '#ffd166', p: 4.2 }, { x: 33.5, y: 17.5, c: '#ff9ec5', p: 1.3 },
@@ -1154,7 +1206,7 @@ const Game = (() => {
       { x: 33.5, y: 8.5, c: '#cdb0ee', p: 3.6 }, { x: 38.5, y: 24.5, c: '#a8d8e8', p: 5.2 },
     ],
   };
-  function drawButterflies(cam) {
+  function drawButterflies(cam: Cam) {
     const list = BFLY[player.map];
     if (!list) return;
     for (const b of list) {
@@ -1176,7 +1228,7 @@ const Game = (() => {
       mg.draw(ctx);
       UI.drawToasts(ctx);
     } else if (state === 'summary') {
-      UI.drawSummary(ctx, G, summaryInfo, summaryT);
+      UI.drawSummary(ctx, G, summaryInfo!, summaryT);
     } else {
       drawWorld();
       UI.drawHUD(ctx, { ...gview(), tmin: G.tmin });
@@ -1200,7 +1252,7 @@ const Game = (() => {
   }
 
   // ---------- input ----------
-  const CODE_MAP = {
+  const CODE_MAP: Record<string, string> = {
     ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
     KeyE: 'action', Enter: 'action', Space: 'action', Escape: 'back',
@@ -1239,7 +1291,7 @@ const Game = (() => {
     });
   }
 
-  function onKey(e) {
+  function onKey(e: KeyboardEvent) {
     if (e.repeat && state !== 'play') return;
     const act = CODE_MAP[e.code];
     if (CODE_MAP[e.code] || ['KeyB', 'KeyJ', 'KeyM', 'KeyN'].includes(e.code)) e.preventDefault();
@@ -1295,13 +1347,13 @@ const Game = (() => {
     if (act === 'action' && !e.repeat && !fade) { interact(); return; }
     if (['left', 'right', 'up', 'down'].includes(act)) held.add(act);
   }
-  function onKeyUp(e) {
+  function onKeyUp(e: KeyboardEvent) {
     const act = CODE_MAP[e.code];
     if (act) held.delete(act);
   }
 
   // ---------- boot ----------
-  function loop(ts) {
+  function loop(ts: number) {
     const dt = Math.min(0.05, (ts - last) / 1000 || 0.016);
     last = ts;
     time += dt;
@@ -1311,8 +1363,8 @@ const Game = (() => {
   }
 
   function init() {
-    canvas = document.getElementById('game');
-    ctx = canvas.getContext('2d');
+    canvas = document.getElementById('game') as HTMLCanvasElement;
+    ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     SpriteLib.build();
     Maps.init();
@@ -1328,4 +1380,6 @@ const Game = (() => {
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   window.addEventListener('load', () => Game.init());
+  // dev harness hook: check.js / smoke.js reach the modules through here
+  (window as any).Starry = { Game, Maps, Entities, SpriteLib, AudioSys, UI, Minigames };
 }

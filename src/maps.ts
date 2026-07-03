@@ -6,21 +6,25 @@
    is the hub, with lines to the city, the beach, and the farm.
    ====================================================================== */
 
-const Maps = (() => {
+import type { MapData, Warp, Dir } from './types';
 
-  const DATA = {
-    town:  { label: 'Starview Meadow', base: '.', outdoor: true, music: 'meadow', rows: null },
-    city:  { label: 'Starbright City', base: ';', outdoor: true, music: 'city', rows: null },
-    beach: { label: 'Shelly Shores', base: 's', outdoor: true, music: 'pool', rows: null },
-    farm:  { label: 'Sunny Hooves Farm', base: '.', outdoor: true, music: 'meadow', rows: null },
+type Grid = string[][];
+
+export const Maps = (() => {
+
+  const DATA: Record<string, MapData> = {
+    town:  { label: 'Starview Meadow', base: '.', outdoor: true, music: 'meadow', rows: [] },
+    city:  { label: 'Starbright City', base: ';', outdoor: true, music: 'city', rows: [] },
+    beach: { label: 'Shelly Shores', base: 's', outdoor: true, music: 'pool', rows: [] },
+    farm:  { label: 'Sunny Hooves Farm', base: '.', outdoor: true, music: 'meadow', rows: [] },
   };
 
   // ---- grid helpers (shared by town & city) ----
-  const grid = (w, h, fill) => Array.from({ length: h }, () => Array(w).fill(fill));
-  function rect(g, x0, y0, x1, y1, ch) {
+  const grid = (w: number, h: number, fill: string): Grid => Array.from({ length: h }, () => Array(w).fill(fill));
+  function rect(g: Grid, x0: number, y0: number, x1: number, y1: number, ch: string) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y][x] = ch;
   }
-  function building(g, x, y, w, roofH, roofCh, doorCh, stub) {
+  function building(g: Grid, x: number, y: number, w: number, roofH: number, roofCh: string, doorCh: string, stub?: string) {
     rect(g, x, y, x + w - 1, y + roofH - 1, roofCh);
     const wy = y + roofH;
     for (let i = 0; i < w; i++) g[wy][x + i] = (i % 3 === 1 && i > 0 && i < w - 1) ? 'o' : '=';
@@ -29,11 +33,11 @@ const Maps = (() => {
     g[dy][dx] = doorCh;            // the door itself
     g[dy + 1][dx] = stub || 'p';  // little path stub to the street
   }
-  function border(g, w, h, ch) {
+  function border(g: Grid, w: number, h: number, ch: string) {
     rect(g, 0, 0, w - 1, 1, ch); rect(g, 0, h - 2, w - 1, h - 1, ch);
     rect(g, 0, 0, 1, h - 1, ch); rect(g, w - 2, 0, w - 1, h - 1, ch);
   }
-  function sprinkle(g, w, h) {        // flowers & grass tufts on open grass
+  function sprinkle(g: Grid, w: number, h: number) {        // flowers & grass tufts on open grass
     for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
       if (g[y][x] !== '.') continue;
       if ((x * 7 + y * 13) % 31 === 0) g[y][x] = ',';
@@ -373,10 +377,10 @@ const Maps = (() => {
   // E is the walkable pool deck rim. Doors and bus stops stay walkable.
   const SOLID = new Set('#f%12345<=o|bvmkyTcADtMQGhdgaunqzeFYJ@IlijNV[])89?"{}('.split(''));
   const WATER = new Set(['w', 'W']);
-  const isWater = (name, x, y) => WATER.has(tileAt(name, x, y));
+  const isWater = (name: string, x: number, y: number) => WATER.has(tileAt(name, x, y));
 
   // building doors: which outdoor map they sit on, and the interior they open
-  const DOORS = {
+  const DOORS: Record<string, { outer: string; inner: string }> = {
     H: { outer: 'town', inner: 'home' },   S: { outer: 'town', inner: 'school' },
     P: { outer: 'town', inner: 'pool' },   L: { outer: 'town', inner: 'ballet' },
     C: { outer: 'town', inner: 'shop' },   '0': { outer: 'town', inner: 'art' },
@@ -385,17 +389,17 @@ const Maps = (() => {
     X: { outer: 'farm', inner: 'barn' },
   };
   // outdoor<->outdoor links (bus stops): walk onto `ch` to ride between maps
-  const OFF = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-  const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
-  const LINKS = [
+  const OFF: Record<Dir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const OPP: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+  const LINKS: { a: { map: string; ch: string }; b: { map: string; ch: string }; dir: Dir }[] = [
     { a: { map: 'town', ch: 'B' }, b: { map: 'city', ch: 'B' }, dir: 'right' },
     { a: { map: 'town', ch: '6' }, b: { map: 'beach', ch: 'B' }, dir: 'right' },
     { a: { map: 'town', ch: '7' }, b: { map: 'farm', ch: 'B' }, dir: 'left' },
   ];
 
-  const warps = {};   // mapName -> { 'x,y': {map, x, y, dir} }
+  const warps: Record<string, Record<string, Warp>> = {};   // mapName -> { 'x,y': {map, x, y, dir} }
 
-  function find(mapName, ch) {
+  function find(mapName: string, ch: string) {
     const rows = DATA[mapName].rows;
     for (let y = 0; y < rows.length; y++) {
       const x = rows[y].indexOf(ch);
@@ -424,18 +428,18 @@ const Maps = (() => {
     }
   }
 
-  function get(name) { return DATA[name]; }
-  function tileAt(name, x, y) {
+  function get(name: string) { return DATA[name]; }
+  function tileAt(name: string, x: number, y: number): string {
     const rows = DATA[name].rows;
     if (y < 0 || y >= rows.length || x < 0 || x >= rows[0].length) return '#';
     return rows[y][x];
   }
-  function isSolid(name, x, y) { return SOLID.has(tileAt(name, x, y)); }
-  function size(name) {
+  function isSolid(name: string, x: number, y: number) { return SOLID.has(tileAt(name, x, y)); }
+  function size(name: string) {
     const rows = DATA[name].rows;
     return { w: rows[0].length, h: rows.length };
   }
-  function warpAt(name, x, y) { return warps[name] && warps[name][x + ',' + y] || null; }
+  function warpAt(name: string, x: number, y: number): Warp | null { return warps[name] && warps[name][x + ',' + y] || null; }
 
   return { DATA, SOLID, DOORS, LINKS, init, get, tileAt, isSolid, isWater, size, warpAt, find };
 })();

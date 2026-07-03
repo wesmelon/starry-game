@@ -1,15 +1,26 @@
 /* ======================================================================
-   Starry ☆ Little Days — audio.js
+   Starry ☆ Little Days — audio.ts
    Procedural chiptune engine (Web Audio). All music is generated live:
    no audio files. Songs are note lists; a lookahead scheduler plays them.
    ====================================================================== */
 
-const AudioSys = (() => {
+/** [note name | 'R' | 'A4+C5' stack | perc letter, duration in beats] */
+export type Note = [string, number];
+export interface Track {
+  wave: OscillatorType | 'perc';
+  vol: number;
+  env?: 'sustain' | 'pluck';
+  decay?: number;
+  notes: Note[];
+}
+export interface Song { bpm: number; tracks: Track[]; }
+
+export const AudioSys = (() => {
 
   // ---------- note math ----------
-  const SEMI = { C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11 };
-  const freqCache = {};
-  function freq(name) {
+  const SEMI: Record<string, number> = { C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11 };
+  const freqCache: Record<string, number> = {};
+  function freq(name: string): number {
     if (freqCache[name] !== undefined) return freqCache[name];
     const m = /^([A-G][#b]?)(-?\d)$/.exec(name);
     if (!m) return 0;
@@ -18,28 +29,28 @@ const AudioSys = (() => {
   }
 
   // ---------- song-building helpers ----------
-  const CHORDS = {
+  const CHORDS: Record<string, string[]> = {
     C:  ['C','E','G'],   Dm: ['D','F','A'],   Em: ['E','G','B'],
     F:  ['F','A','C'],   G:  ['G','B','D'],   Am: ['A','C','E'],
     Bb: ['Bb','D','F'],  E:  ['E','G#','B'],  D:  ['D','F#','A'],
     A:  ['A','C#','E'],
   };
   // i-th chord tone above the root, in octave oct
-  function chordNote(ch, i, oct) {
+  function chordNote(ch: string, i: number, oct: number): string {
     const t = CHORDS[ch];
     const deg = i % t.length;
     const o = oct + Math.floor(i / t.length);
     return t[deg] + (SEMI[t[deg]] < SEMI[t[0]] ? o + 1 : o);
   }
   // eighth-note arpeggio track from a chord progression (one chord per bar)
-  function arpNotes(prog, oct, pattern) {
-    const out = [];
+  function arpNotes(prog: string[], oct: number, pattern: number[]): Note[] {
+    const out: Note[] = [];
     for (const ch of prog) for (const i of pattern) out.push([chordNote(ch, i, oct), 0.5]);
     return out;
   }
   // simple root/fifth bass, one chord per 4/4 bar
-  function bassNotes(prog, oct) {
-    const out = [];
+  function bassNotes(prog: string[], oct: number): Note[] {
+    const out: Note[] = [];
     for (const ch of prog) {
       out.push([chordNote(ch, 0, oct), 1], [chordNote(ch, 2, oct), 1],
                [chordNote(ch, 0, oct), 1], [chordNote(ch, 2, oct), 1]);
@@ -47,8 +58,8 @@ const AudioSys = (() => {
     return out;
   }
   // off-beat "chick" chords (eighth rests on the beat), 4/4
-  function offbeatNotes(prog, oct) {
-    const out = [];
+  function offbeatNotes(prog: string[], oct: number): Note[] {
+    const out: Note[] = [];
     for (const ch of prog) {
       const stack = chordNote(ch, 1, oct) + '+' + chordNote(ch, 2, oct);
       for (let b = 0; b < 4; b++) out.push(['R', 0.5], [stack, 0.5]);
@@ -56,21 +67,21 @@ const AudioSys = (() => {
     return out;
   }
   // waltz oom-pah-pah accompaniment (3/4): bass beat 1, chords beats 2+3
-  function waltzBass(prog, oct) {
-    const out = [];
+  function waltzBass(prog: string[], oct: number): Note[] {
+    const out: Note[] = [];
     for (const ch of prog) out.push([chordNote(ch, 0, oct), 1], ['R', 2]);
     return out;
   }
-  function waltzChords(prog, oct) {
-    const out = [];
+  function waltzChords(prog: string[], oct: number): Note[] {
+    const out: Note[] = [];
     for (const ch of prog) {
       const stack = chordNote(ch, 1, oct) + '+' + chordNote(ch, 2, oct);
       out.push(['R', 1], [stack, 1], [stack, 1]);
     }
     return out;
   }
-  function perc(pattern) { // string per beat-eighth: k kick, h hat, s snare, . rest
-    const out = [];
+  function perc(pattern: string): Note[] { // string per beat-eighth: k kick, h hat, s snare, . rest
+    const out: Note[] = [];
     for (const c of pattern) out.push([c === '.' ? 'R' : c, 0.5]);
     return out;
   }
@@ -78,7 +89,7 @@ const AudioSys = (() => {
   /* ---------- THE SOUNDTRACK ----------
      tracks: wave (sine|square|triangle|sawtooth|perc), vol, env (sustain|pluck),
      decay (pluck tail seconds), notes [[name|'R'|'A4+C5', beats], ...]      */
-  const SONGS = {};
+  const SONGS: Record<string, Song> = {};
 
   // ~ Sunny Meadow ~ (town, day) — bright and bouncy
   {
@@ -224,14 +235,16 @@ const AudioSys = (() => {
   }
 
   // ---------- engine ----------
-  let ctx = null, master, musicBus, sfxBus, noiseBuf;
-  let song = null, songName = '', trackState = [], musicOn = true;
+  let ctx: AudioContext | null = null;
+  let master: GainNode, musicBus: GainNode, sfxBus: GainNode, noiseBuf: AudioBuffer;
+  let song: Song | null = null, songName = '', musicOn = true;
+  let trackState: { idx: number; time: number }[] = [];
   const LOOKAHEAD = 0.18, TICK_MS = 45;
 
   function init() {
     if (ctx) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    ctx = new AC();
+    const AC = window.AudioContext || (window as any).webkitAudioContext;
+    ctx = new AC() as AudioContext;
     master = ctx.createGain(); master.gain.value = 0.55; master.connect(ctx.destination);
     musicBus = ctx.createGain(); musicBus.gain.value = 1; musicBus.connect(master);
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
@@ -243,7 +256,7 @@ const AudioSys = (() => {
     if (songName) { const n = songName; songName = ''; play(n); }
   }
 
-  function play(name) {
+  function play(name: string) {
     if (songName === name) return;
     songName = name;
     song = SONGS[name] || null;
@@ -280,10 +293,10 @@ const AudioSys = (() => {
     }
   }
 
-  function voice(tr, f, t, dur) {
-    if (!f) return;
+  function voice(tr: Track, f: number, t: number, dur: number) {
+    if (!f || !ctx) return;
     const o = ctx.createOscillator();
-    o.type = tr.wave;
+    o.type = tr.wave as OscillatorType;
     o.frequency.value = f;
     const g = ctx.createGain();
     const v = tr.vol;
@@ -303,7 +316,8 @@ const AudioSys = (() => {
     o.connect(g); g.connect(musicBus);
   }
 
-  function percHit(kind, t, vol) {
+  function percHit(kind: string, t: number, vol: number) {
+    if (!ctx) return;
     if (kind === 'k') { // soft kick
       const o = ctx.createOscillator(); o.type = 'sine';
       o.frequency.setValueAtTime(130, t);
@@ -326,7 +340,8 @@ const AudioSys = (() => {
   }
 
   // ---------- sound effects ----------
-  function tone(f, t, dur, wave, vol, bend) {
+  function tone(f: number, t: number, dur: number, wave: OscillatorType, vol: number, bend?: number) {
+    if (!ctx) return;
     const o = ctx.createOscillator(); o.type = wave;
     o.frequency.setValueAtTime(f, t);
     if (bend) o.frequency.exponentialRampToValueAtTime(bend, t + dur);
@@ -336,7 +351,8 @@ const AudioSys = (() => {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + dur + 0.05);
   }
-  function noiseHit(t, dur, vol, hp) {
+  function noiseHit(t: number, dur: number, vol: number, hp: number) {
+    if (!ctx) return;
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
     const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
     const g = ctx.createGain();
@@ -345,45 +361,47 @@ const AudioSys = (() => {
     src.connect(f); f.connect(g); g.connect(sfxBus);
     src.start(t); src.stop(t + dur + 0.02);
   }
-  function jingle(seq) { // [[note, startBeat, durBeat], ...] at 150bpm
+  function jingle(seq: [string, number, number][]) { // [[note, startBeat, durBeat], ...] at 150bpm
+    if (!ctx) return;
     const t0 = ctx.currentTime + 0.02, spb = 60 / 150;
     for (const [n, s, d] of seq) tone(freq(n), t0 + s * spb, d * spb, 'triangle', 0.18);
   }
 
-  const SFX = {
-    blip()    { tone(620, ctx.currentTime, 0.05, 'square', 0.05); },
-    select()  { tone(freq('E5'), ctx.currentTime, 0.07, 'triangle', 0.14); },
+  const now = () => (ctx as AudioContext).currentTime;
+  const SFX: Record<string, (arg?: any) => void> = {
+    blip()    { tone(620, now(), 0.05, 'square', 0.05); },
+    select()  { tone(freq('E5'), now(), 0.07, 'triangle', 0.14); },
     confirm() { jingle([['C5',0,.5],['E5',.5,.5],['G5',1,.9]]); },
-    deny()    { tone(180, ctx.currentTime, 0.18, 'square', 0.07, 130); },
+    deny()    { tone(180, now(), 0.18, 'square', 0.07, 130); },
     star()    { jingle([['B5',0,.4],['E6',.35,1.0]]); },
     sticker() { jingle([['C5',0,.4],['E5',.3,.4],['G5',.6,.4],['C6',.9,.4],['E6',1.2,1.4]]); },
     fanfare() { jingle([['C5',0,.5],['E5',.5,.5],['G5',1,.5],['C6',1.5,1],['G5',2.5,.5],['C6',3,2]]); },
-    splash()  { noiseHit(ctx.currentTime, 0.30, 0.22, 900); tone(300, ctx.currentTime, 0.18, 'sine', 0.1, 80); },
-    step()    { noiseHit(ctx.currentTime, 0.03, 0.035, 3000); },
+    splash()  { noiseHit(now(), 0.30, 0.22, 900); tone(300, now(), 0.18, 'sine', 0.1, 80); },
+    step()    { noiseHit(now(), 0.03, 0.035, 3000); },
     yay()     { jingle([['G5',0,.3],['C6',.25,.8]]); },
-    pop()     { tone(900, ctx.currentTime, 0.06, 'sine', 0.15, 1400); },
+    pop()     { tone(900, now(), 0.06, 'sine', 0.15, 1400); },
     sleep()   { jingle([['C6',0,.7],['G5',.7,.7],['E5',1.4,.7],['C5',2.1,1.6]]); },
-    munch()   { noiseHit(ctx.currentTime, 0.06, 0.12, 1500); tone(250, ctx.currentTime + .07, 0.07, 'triangle', 0.1); },
-    whee()    { tone(400, ctx.currentTime, 0.35, 'sine', 0.15, 1100); },
-    quack()   { tone(310, ctx.currentTime, 0.09, 'sawtooth', 0.08, 240);
-                tone(290, ctx.currentTime + 0.12, 0.09, 'sawtooth', 0.08, 220); },
-    bell()    { tone(freq('E6'), ctx.currentTime, 0.18, 'triangle', 0.16);
-                tone(freq('E6'), ctx.currentTime + 0.15, 0.30, 'triangle', 0.16); },
-    meow()    { tone(620, ctx.currentTime, 0.28, 'sawtooth', 0.05, 420); },
-    woof()    { tone(190, ctx.currentTime, 0.10, 'square', 0.08, 120);
-                tone(210, ctx.currentTime + 0.14, 0.10, 'square', 0.08, 130); },
-    squeak()  { tone(1100, ctx.currentTime, 0.07, 'sine', 0.10, 1500);
-                tone(1300, ctx.currentTime + 0.1, 0.07, 'sine', 0.10, 1700); },
-    moo()     { tone(200, ctx.currentTime, 0.5, 'sawtooth', 0.07, 110);
-                tone(400, ctx.currentTime, 0.16, 'sine', 0.05, 220); },
-    neigh()   { tone(700, ctx.currentTime, 0.3, 'sawtooth', 0.05, 450);
-                tone(500, ctx.currentTime + 0.28, 0.18, 'sawtooth', 0.04, 380); },
-    note(n)   { tone(freq(n), ctx.currentTime, 0.5, 'triangle', 0.18); },
+    munch()   { noiseHit(now(), 0.06, 0.12, 1500); tone(250, now() + .07, 0.07, 'triangle', 0.1); },
+    whee()    { tone(400, now(), 0.35, 'sine', 0.15, 1100); },
+    quack()   { tone(310, now(), 0.09, 'sawtooth', 0.08, 240);
+                tone(290, now() + 0.12, 0.09, 'sawtooth', 0.08, 220); },
+    bell()    { tone(freq('E6'), now(), 0.18, 'triangle', 0.16);
+                tone(freq('E6'), now() + 0.15, 0.30, 'triangle', 0.16); },
+    meow()    { tone(620, now(), 0.28, 'sawtooth', 0.05, 420); },
+    woof()    { tone(190, now(), 0.10, 'square', 0.08, 120);
+                tone(210, now() + 0.14, 0.10, 'square', 0.08, 130); },
+    squeak()  { tone(1100, now(), 0.07, 'sine', 0.10, 1500);
+                tone(1300, now() + 0.1, 0.07, 'sine', 0.10, 1700); },
+    moo()     { tone(200, now(), 0.5, 'sawtooth', 0.07, 110);
+                tone(400, now(), 0.16, 'sine', 0.05, 220); },
+    neigh()   { tone(700, now(), 0.3, 'sawtooth', 0.05, 450);
+                tone(500, now() + 0.28, 0.18, 'sawtooth', 0.04, 380); },
+    note(n)   { tone(freq(n), now(), 0.5, 'triangle', 0.18); },
     sparkle() { jingle([['B5',0,.25],['E6',.18,.25],['A6',.36,.55]]); },
     ride()    { jingle([['C5',0,.3],['E5',.25,.3],['G5',.5,.3],['E5',.75,.3],['C5',1,.55]]); },
   };
 
-  function sfx(name, arg) { if (ctx && ctx.state === 'running' && SFX[name]) SFX[name](arg); }
+  function sfx(name: string, arg?: any) { if (ctx && ctx.state === 'running' && SFX[name]) SFX[name](arg); }
   function resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
 
   return { init, play, stop, sfx, toggleMusic, resume,

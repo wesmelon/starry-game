@@ -58,13 +58,16 @@ let simTime = 0;
 vm.createContext(sandbox);
 
 const root = path.join(__dirname, '..');
-for (const f of ['js/audio.js', 'js/sprites.js', 'js/maps.js', 'js/entities.js', 'js/minigames.js', 'js/ui.js', 'js/main.js']) {
-  const src = fs.readFileSync(path.join(root, f), 'utf8');
-  try { vm.runInContext(src, sandbox, { filename: f }); }
-  catch (e) { failures++; console.log('  FAIL  ' + f + ' threw at load: ' + e.message); }
+const bundlePath = path.join(root, 'dist/game.js');
+if (!fs.existsSync(bundlePath)) {
+  console.log('dist/game.js not found — run `npm run build` first.');
+  process.exit(1);
 }
-const { Maps, Entities, SpriteLib, AudioSys, Minigames, UI, Game } =
-  vm.runInContext('({ Maps, Entities, SpriteLib, AudioSys, Minigames, UI, Game })', sandbox);
+try { vm.runInContext(fs.readFileSync(bundlePath, 'utf8'), sandbox, { filename: 'dist/game.js' }); }
+catch (e) { console.log('  FAIL  bundle threw at load: ' + e.message); process.exit(1); }
+
+// the bundle exposes its modules on window.Starry for dev tooling
+const { Maps, Entities, SpriteLib, AudioSys, Minigames, UI } = windowStub.Starry;
 
 // no real audio in a stub world
 for (const k of ['init', 'play', 'stop', 'sfx', 'resume', 'toggleMusic']) AudioSys[k] = noop;

@@ -1,13 +1,18 @@
 /* Node-side sanity checks for the game data (no browser needed).
+   Reads the built bundle — run `npm run build` first (or `npm run check`,
+   which builds and then runs this).
    Run: node dev/check.js                                          */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
+// a window/document just real enough for the bundle to load; the game
+// only touches the DOM from Game.init(), which we never call here
+const windowStub = { addEventListener: () => {} };
 const sandbox = {
   console, setInterval: () => 0, setTimeout: () => 0, performance: { now: () => 0 },
-  window: undefined, document: undefined, localStorage: undefined,
+  window: windowStub, document: {}, localStorage: undefined,
 };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
@@ -17,16 +22,16 @@ function check(ok, msg) {
   if (!ok) { failures++; console.log('  FAIL  ' + msg); }
 }
 
-for (const f of ['js/audio.js', 'js/sprites.js', 'js/maps.js', 'js/entities.js', 'js/minigames.js', 'js/ui.js', 'js/main.js']) {
-  const src = fs.readFileSync(path.join(root, f), 'utf8');
-  try { vm.runInContext(src, sandbox, { filename: f }); }
-  catch (e) { failures++; console.log('  FAIL  ' + f + ' threw at load: ' + e.message); }
+const bundlePath = path.join(root, 'dist/game.js');
+if (!fs.existsSync(bundlePath)) {
+  console.log('dist/game.js not found — run `npm run build` first.');
+  process.exit(1);
 }
+try { vm.runInContext(fs.readFileSync(bundlePath, 'utf8'), sandbox, { filename: 'dist/game.js' }); }
+catch (e) { console.log('  FAIL  bundle threw at load: ' + e.message); process.exit(1); }
 
-// top-level `const` in vm scripts lives in the context's lexical scope, not on
-// the sandbox object — pull the globals out with an expression instead
-const { Maps, Entities, SpriteLib, AudioSys } =
-  vm.runInContext('({ Maps, Entities, SpriteLib, AudioSys })', sandbox);
+// the bundle exposes its modules on window.Starry for dev tooling
+const { Maps, Entities, SpriteLib, AudioSys } = windowStub.Starry;
 
 // ---- maps ----
 console.log('maps:');
@@ -43,7 +48,7 @@ check(Maps.DATA.town.rows.length === 46 && Maps.DATA.town.rows[0].length === 64,
 check(!!Maps.DATA.city, 'city map exists');
 
 // every used tile char has a painter (checked against the sprites PAINT registry indirectly)
-const spritesSrc = fs.readFileSync(path.join(root, 'js/sprites.js'), 'utf8');
+const spritesSrc = fs.readFileSync(path.join(root, 'src/sprites.ts'), 'utf8');
 for (const ch of tileChars) {
   check(SpriteLib.hasTile(ch), `tile char "${ch}" has a painter`);
 }
@@ -109,7 +114,7 @@ for (const a of Entities.ANIMALS) {
 }
 // the bike parks on walkable ground
 {
-  const mainSrcB = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
+  const mainSrcB = fs.readFileSync(path.join(root, 'src/main.ts'), 'utf8');
   const m = mainSrcB.match(/BIKE_HOME = \{ x: ([\d.]+), y: ([\d.]+) \}/);
   check(!!m, 'found BIKE_HOME in main.js');
   if (m) check(!Maps.isSolid('town', Math.floor(+m[1]), Math.floor(+m[2])) &&
@@ -175,7 +180,7 @@ for (const s of Entities.STICKERS) {
 }
 
 // awarded sticker ids referenced in main.js exist
-const mainSrc = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
+const mainSrc = fs.readFileSync(path.join(root, 'src/main.ts'), 'utf8');
 const awarded = [...mainSrc.matchAll(/award\('(\w+)'\)/g)].map(m => m[1]);
 for (const a of awarded) check(ids.has(a), `award('${a}') is a real sticker`);
 const milestoneIds = ['abc', 'scholar', 'goldfish', 'dolphin', 'tutu', 'prima'];
