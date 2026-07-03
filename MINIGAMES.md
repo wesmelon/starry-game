@@ -50,21 +50,23 @@ draw(g: CanvasRenderingContext2D): void;   // full-screen scene, canvas is 1248�
 
 and call `done(stars, perfect)` exactly once when the player leaves the
 result screen. Extending `BaseMinigame` gives you all of that plumbing.
+Set `inputMode = 'letters'` only for games that need raw alphabet keys
+instead of the normal action mapping.
 
 **Input model — important:** the game receives discrete keydown events
 only. Key **repeat is disabled** while a minigame is open, so "hold to
 move" does not work. Design around taps: lane switching (`shells`,
-`bubblepop`), alternating mashes (`swim`), or matching prompts
-(`ballet`, `balloonbop`, `veggies`, `hopscotch`).
+`bubblepop`), alternating mashes (`swim`), matching prompts
+(`ballet`, `balloonbop`, `veggies`), or letter prompts (`hopscotch`).
 
 **Rules (all games follow these):**
 
 - Award 1–3 stars via `complete(stars, perfect)`; `perfect` earns a bonus
   star from the launcher. Everyone gets at least one star — this is a
   kind game (`complete` clamps for you).
-- The game must end **without any input**: give prompts a timeout that
-  counts as a miss and moves on. A stuck game hangs both toddlers and the
-  smoke test.
+- The game must always have a path to finish under its registered
+  `keys`. Timed games can advance on a miss; toddler-paced games can wait
+  indefinitely, but every prompt must accept one of the registered keys.
 - Keep it under a minute of real play.
 - Randomness is fine, but never randomize away winnability.
 
@@ -216,7 +218,7 @@ reference.
 | `veggies` | Veggie Round-up | Farmer Fern |
 | `bubblepop` | Bubble Pop | city bubble-stand tile |
 | `balloonbop` | Balloon Bop | city balloon-cart tile |
-| `hopscotch` | Hopscotch Hero | city hopscotch tile |
+| `hopscotch` | Hopscotch Hero | city hopscotch tile, alphabet prompts |
 
 The single source of truth is the block of `api.register(...)` calls at
 the bottom of `src/minigames.ts` — each game's label, economics, `keys`,

@@ -1251,6 +1251,9 @@ export const Game = (() => {
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
     KeyE: 'action', Enter: 'action', Space: 'action', Escape: 'back',
   };
+  function keyLetter(code: string): string | null {
+    return /^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase() : null;
+  }
 
   function newGame() {
     G = freshG();
@@ -1288,12 +1291,18 @@ export const Game = (() => {
   function onKey(e: KeyboardEvent) {
     if (e.repeat && state !== 'play') return;
     const act = CODE_MAP[e.code];
-    if (CODE_MAP[e.code] || ['KeyB', 'KeyJ', 'KeyM', 'KeyN'].includes(e.code)) e.preventDefault();
+    const alpha = state === 'minigame' ? keyLetter(e.code) : null;
+    if (CODE_MAP[e.code] || alpha || ['KeyB', 'KeyJ', 'KeyM', 'KeyN'].includes(e.code)) e.preventDefault();
     if (!audioReady) {
       AudioSys.init(); AudioSys.resume();
       audioReady = true;
     }
     AudioSys.resume();
+    if (state === 'minigame' && mg) {
+      if (mg.inputMode === 'letters' && alpha) { mg.key(alpha); return; }
+      if (act) { mg.key(act); return; }
+      if (mg.inputMode === 'letters') return;
+    }
     if (e.code === 'KeyN') {
       const on = AudioSys.toggleMusic();
       UI.toast(on ? 'Music on ♪' : 'Music off', 'note');
@@ -1310,7 +1319,6 @@ export const Game = (() => {
       }
       return;
     }
-    if (state === 'minigame' && mg) { if (act) mg.key(act); return; }
     if (state === 'summary') {
       if (act === 'action' && summaryT > 0.8) { AudioSys.sfx('confirm'); newDay(); }
       return;

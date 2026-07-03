@@ -8,7 +8,7 @@
 
 import { AudioSys } from './audio';
 import { SpriteLib } from './sprites';
-import type { Minigame, MinigameDone } from './types';
+import type { Minigame, MinigameDone, MinigameInputMode } from './types';
 
 type Ctx = CanvasRenderingContext2D;
 type MinigameCtor = new (done: MinigameDone) => Minigame;
@@ -128,6 +128,7 @@ export const Minigames = (() => {
   const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
   class BaseMinigame {
+    inputMode: MinigameInputMode;
     done: MinigameDone;
     phase: string;
     t: number;
@@ -135,6 +136,7 @@ export const Minigames = (() => {
     stars: number;
     perfect: boolean;
     constructor(done: MinigameDone) {
+      this.inputMode = 'actions';
       this.done = done;
       this.phase = 'intro';
       this.t = 0;
@@ -143,8 +145,9 @@ export const Minigames = (() => {
       this.perfect = false;
     }
     key(act: string) {
-      if (this.phase === 'intro' && act === 'action') { this.start(); return; }
-      if (this.phase === 'result' && act === 'action' && this.rt > 1) { this.done(this.stars, this.perfect); return; }
+      const menuAction = act === 'action' || (this.inputMode === 'letters' && act === 'e');
+      if (this.phase === 'intro' && menuAction) { this.start(); return; }
+      if (this.phase === 'result' && menuAction && this.rt > 1) { this.done(this.stars, this.perfect); return; }
       this.handleInput(act);
     }
     start() {
@@ -1349,15 +1352,18 @@ export const Minigames = (() => {
   }
 
   /* ================= CITY : Hopscotch Hero ================= */
+  const HOPSCOTCH_LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
   class HopscotchMinigame extends BaseMinigame {
     total: number;
     step: number;
     score: number;
-    cur: { dir: string; t: number; age: number } | null;
+    cur: { letter: string; age: number } | null;
     flash: number;
     goodFlash: boolean;
     constructor(done: MinigameDone) {
       super(done);
+      this.inputMode = 'letters';
       this.total = 10;
       this.step = 0;
       this.score = 0;
@@ -1371,7 +1377,7 @@ export const Minigames = (() => {
       AudioSys.sfx('confirm');
     }
     nextHop() {
-      this.cur = { dir: DIRS[Math.floor(Math.random() * DIRS.length)], t: 1.5, age: 0 };
+      this.cur = { letter: HOPSCOTCH_LETTERS[Math.floor(Math.random() * HOPSCOTCH_LETTERS.length)], age: 0 };
     }
     finishHop(good: boolean) {
       if (good) this.score++;
@@ -1386,15 +1392,13 @@ export const Minigames = (() => {
       }
     }
     handleInput(act: string) {
-      if (this.phase !== 'play' || !DIRS.includes(act) || !this.cur) return;
-      this.finishHop(act === this.cur.dir);
+      if (this.phase !== 'play' || !/^[a-z]$/.test(act) || !this.cur) return;
+      this.finishHop(act === this.cur.letter);
     }
     updatePlay(dt: number) {
       this.flash = Math.max(0, this.flash - dt);
       if (this.phase !== 'play' || !this.cur) return;
       this.cur.age += dt;
-      this.cur.t -= dt;
-      if (this.cur.t <= 0) this.finishHop(false);
     }
     draw(g: Ctx) {
       const W = g.canvas.width, H = g.canvas.height;
@@ -1403,8 +1407,8 @@ export const Minigames = (() => {
       if (this.phase === 'intro') {
         panel(g, W / 2 - 320, 225, 640, 190, '#fff8ee');
         label(g, 'Hopscotch Hero!', W / 2, 280, 36, '#9a7ad0');
-        label(g, 'Hop to the arrow on each chalk square.', W / 2, 330, 21, '#5a4a6a');
-        label(g, 'Press the matching arrow. Press E!', W / 2, 365, 21, '#b85c8a');
+        label(g, 'Hop to the letter on each chalk square.', W / 2, 330, 21, '#5a4a6a');
+        label(g, 'Press the matching alphabet key. Press E!', W / 2, 365, 21, '#b85c8a');
         return;
       }
       if (this.phase === 'result') {
@@ -1426,15 +1430,14 @@ export const Minigames = (() => {
           g.fillStyle = active ? '#fff8ee' : (done ? 'rgba(154,219,122,.65)' : colors[i % colors.length]);
           g.fill();
           g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
+          if (active && this.cur) label(g, this.cur.letter.toUpperCase(), x, y + 22, 25, '#5a4a6a');
         }
       }
       const px = sx, py = top + this.step * 45 + 42;
       sprite(g, 'starry', 'down', Math.floor(this.t * 6) % 2 ? 1 : 2, px, py + Math.sin(this.t * 12) * 6, 3.5);
       if (this.cur) {
         const pulse = 1 + Math.sin(this.cur.age * 10) * 0.08;
-        label(g, ARROW_GLYPHS[this.cur.dir], sx, 120, 66 * pulse, '#5a4a6a');
-        g.fillStyle = 'rgba(255,255,255,.72)'; rr(g, sx - 155, 95, 310, 12, 6); g.fill();
-        g.fillStyle = '#9a7ad0'; rr(g, sx - 155, 95, 310 * Math.max(0, this.cur.t / 1.5), 12, 6); g.fill();
+        label(g, this.cur.letter.toUpperCase(), sx, 120, 68 * pulse, '#5a4a6a');
       }
       if (this.flash > 0) label(g, this.goodFlash ? 'Hop!' : 'Wobble!', W / 2, H - 82, 28, this.goodFlash ? '#6ab85f' : '#d85a5a');
     }
@@ -1512,8 +1515,8 @@ export const Minigames = (() => {
   });
   api.register('hopscotch', HopscotchMinigame, {
     label: 'Hopscotch Hero', energy: 8, minutes: 25, minEnergy: 10,
-    keys: ['up', 'down', 'left', 'right'],
-    description: 'Hop the chalk course by matching each arrow in time.',
+    keys: HOPSCOTCH_LETTERS,
+    description: 'Hop the chalk course by matching each alphabet letter at your own pace.',
   });
 
   return api;

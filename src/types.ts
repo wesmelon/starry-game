@@ -89,8 +89,11 @@ export interface MapData {
 
 export interface Warp { map: string; x: number; y: number; dir: Dir; }
 
+export type MinigameInputMode = 'actions' | 'letters';
+
 /** What the game loop needs from a running minigame. */
 export interface Minigame {
+  inputMode?: MinigameInputMode;
   update(dt: number): void;
   draw(g: CanvasRenderingContext2D): void;
   key(act: string): void;

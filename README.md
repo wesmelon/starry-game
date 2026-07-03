@@ -112,7 +112,7 @@ stop to ride, and onto the matching stop to ride home again:
   Mrs. Honey at the Honey Bun Bakery.
 - **Ride the carousel**, grab a **balloon** from the cart, play **Balloon
   Bop**, and **make a wish** at the plaza fountain.
-- **Hop the sidewalk hopscotch**, play **Hopscotch Hero**, **blow bubbles**
+- **Hop the sidewalk hopscotch**, play alphabet **Hopscotch Hero**, **blow bubbles**
   at the bubble stand, play **Bubble Pop**, and pump the **city swings**.
 - **Make friends with Rosie**, the baker's granddaughter who lives by the
   carousel — fill her hearts for the "City Pal" sticker.
