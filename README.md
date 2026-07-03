@@ -203,3 +203,8 @@ Two headless validators run against the built bundle (no browser needed):
 Adding a minigame? Read `MINIGAMES.md` — games are self-contained classes
 registered with their metadata in one place, and the validators pick new
 ones up automatically.
+
+Working with Claude Code? Project skills in `.claude/skills/` capture the
+recipes for the common jobs — `add-minigame`, `add-area`, `add-character`,
+`add-activity`, and `add-music` — including the cross-file registries and
+validator constraints each one has to satisfy.
