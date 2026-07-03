@@ -509,6 +509,7 @@ export const Game = (() => {
     l: ['The sign says: Storytime Library! Pick a book and read with Miss Paige.'],
     j: ['The sign says: Tippy Top Toys! Blocks, balls, and wind-up froggies.'],
     N: ['The sign says: Honey Bun Bakery! Muffins, cocoa, and twisty pretzels.'],
+    '/': ['The sign says: Wonder Roll Park! Tiny rolling puzzles and build-your-own mazes inside.'],
     '(': ['The sign says: Rainbow Art Room! Painting with Mr. Doodle on weekend mornings.'],
     '}': ['An easel with a half-painted rainbow. It needs two more colors!'],
     '[': ['A stripey umbrella makes a circle of cool shade. Ahhh.'],
@@ -730,6 +731,15 @@ export const Game = (() => {
           award('bubbles');
           UI.say('Starry', ['Big bubbles, little bubbles, a WHOLE bunch of bubbles! Pop! Pop! Pop!']);
         }
+      });
+      return;
+    }
+    if (player.map === 'rollerpark' && ch === '/') {
+      UI.choose('Wonder Roll Park', 'A shiny puzzle table is ready for a rolling marble.', [
+        { label: 'Play Roller Lab', value: 'game' },
+        { label: 'Not now', value: null },
+      ], v => {
+        if (v === 'game') startFunGame({ name: 'Wonder Roll Park' }, 'rollerlab');
       });
       return;
     }

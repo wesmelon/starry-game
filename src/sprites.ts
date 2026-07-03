@@ -686,6 +686,13 @@ export const SpriteLib = (() => {
       px(g, 5, 3, 6, 2, '#ff9ec5'); px(g, 4, 4, 8, 2, '#ffb7d2'); px(g, 7, 1, 2, 2, '#e85a5a');
       px(g, 5, 6, 6, 4, '#e8b86a'); px(g, 6, 6, 1, 4, '#caa06a'); px(g, 9, 6, 1, 4, '#caa06a');
     }),
+    '/': (g) => {  // Wonder Roll Park sign / puzzle table
+      PAINT[';'](g);
+      px(g, 1, 1, 14, 10, '#7fb8e8'); px(g, 2, 2, 12, 8, '#cfe6fa');
+      px(g, 3, 3, 10, 2, '#ff9ec5'); px(g, 3, 8, 10, 1, '#7a6a8a');
+      circleFill(g, 5, 7, 2, '#ffd95f'); circleFill(g, 11, 7, 2, '#9a7ad0');
+      px(g, 7, 6, 2, 2, '#6ab85f'); px(g, 4, 12, 8, 3, '#c9935c'); px(g, 5, 11, 6, 1, '#e0b078');
+    },
     '(': (g) => signpost(g, () => {  // art studio: a paintbrush
       px(g, 4, 7, 8, 2, '#c9935c'); px(g, 11, 6, 3, 3, '#8a8f98');
       px(g, 3, 6, 2, 3, '#ff6f9e'); px(g, 2, 7, 2, 2, '#ff6f9e');
@@ -729,8 +736,8 @@ export const SpriteLib = (() => {
   }
 
   const DOOR_TRIM: Record<string, string> = { H:'#ff9ec5', S:'#e87f7f', P:'#7fb8e8', L:'#b89fe0', C:'#8fe0c0',
-                     R:'#8a9ad8', O:'#ffb84f', K:'#ff9ec5', X:'#e88a8a', '0':'#a98cf0' };
-  for (const dc of ['H', 'S', 'P', 'L', 'C', 'R', 'O', 'K', 'X', '0']) {
+                     R:'#8a9ad8', O:'#ffb84f', K:'#ff9ec5', X:'#e88a8a', '0':'#a98cf0', '>':'#7fb8e8' };
+  for (const dc of ['H', 'S', 'P', 'L', 'C', 'R', 'O', 'K', 'X', '0', '>']) {
     PAINT[dc] = ((trim) => (g, f) => PAINT.door(g, f, trim))(DOOR_TRIM[dc]);
   }
 

@@ -414,15 +414,15 @@ export const UI = (() => {
     // beach & farm
     'Z': '#ffd9e8', '[': '#ff9a8f', ']': '#8fd0e8', ')': '#56a55f',
     '8': '#e8c96a', '9': '#c89058', '$': '#e8955a', '?': '#caa07a',
-    '"': '#ffd479', '{': '#fdfdf8', '(': '#caa07a',
+    '"': '#ffd479', '{': '#fdfdf8', '(': '#caa07a', '>': '#8fd0e8', '/': '#7fb8e8',
   };
   // doors, the bus stops and interior exits get a little name tag
   const PLACE_NAMES: Record<string, string> = {
     H: 'Home', S: 'School', P: 'Pool', C: 'Sweets', L: 'Ballet',
-    R: 'Library', O: 'Toys', K: 'Bakery', X: 'Barn', '0': 'Art',
+    R: 'Library', O: 'Toys', K: 'Bakery', X: 'Barn', '0': 'Art', '>': 'Roll Park',
     B: 'Bus stop', '6': 'Beach bus', '7': 'Farm bus', x: 'Door',
   };
-  const PLACE_CHARS = 'HSPCLROKX0B67x';
+  const PLACE_CHARS = 'HSPCLROKX0>B67x';
 
   function tagPill(g: Ctx, label: string, cx: number, cy: number, col?: string, bg?: string) {
     g.font = FONT(13);

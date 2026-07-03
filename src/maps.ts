@@ -131,6 +131,7 @@ export const Maps = (() => {
     building(cg, 6, 4, 9, 3, '4', 'R', ';');    // Library     door (10,8)
     building(cg, 20, 4, 8, 2, '5', 'O', ';');   // Toy Store   door (24,7)
     building(cg, 40, 4, 8, 2, '1', 'K', ';');   // Bakery Café door (44,7)
+    building(cg, 50, 4, 8, 2, '2', '>', ';');   // Wonder Roll Park door (54,7)
     // a plaza fountain on the west green
     rect(cg, 8, 22, 22, 32, ';');
     cg[27][15] = 'F';                    // the city fountain
@@ -158,6 +159,7 @@ export const Maps = (() => {
     cg[9][8] = 'l';                      // library sign (book)
     cg[8][22] = 'j';                     // toy store sign (teddy)
     cg[8][42] = 'N';                     // bakery sign (cupcake)
+    cg[8][52] = '/';                     // roller park sign
     DATA.city.rows = cg.map(r => r.join(''));
   }
 
@@ -344,6 +346,22 @@ export const Maps = (() => {
     ],
   };
 
+  DATA.rollerpark = {
+    label: 'Wonder Roll Park', base: ';', music: 'city',
+    rows: [
+      '||||||||||||||||||||',
+      '|..................|',
+      '|../.....V.....@...|',
+      '|..................|',
+      '|..cT....GG....Tc..|',
+      '|..................|',
+      '|.....U......I.....|',
+      '|..................|',
+      '|........x.........|',
+      '||||||||||||||||||||',
+    ],
+  };
+
   DATA.barn = {
     label: 'The Big Red Barn', base: '_', music: 'shop',
     rows: [
@@ -375,7 +393,7 @@ export const Maps = (() => {
 
   // water (w, W) is not solid — Starry can swim once she's had a class.
   // E is the walkable pool deck rim. Doors and bus stops stay walkable.
-  const SOLID = new Set('#f%12345<=o|bvmkyTcADtMQGhdgaunqzeFYJ@IlijNV[])89?"{}('.split(''));
+  const SOLID = new Set('#f%12345<=o|bvmkyTcADtMQGhdgaunqzeFYJ@IlijNV/[])89?"{}('.split(''));
   const WATER = new Set(['w', 'W']);
   const isWater = (name: string, x: number, y: number) => WATER.has(tileAt(name, x, y));
 
@@ -385,7 +403,7 @@ export const Maps = (() => {
     P: { outer: 'town', inner: 'pool' },   L: { outer: 'town', inner: 'ballet' },
     C: { outer: 'town', inner: 'shop' },   '0': { outer: 'town', inner: 'art' },
     R: { outer: 'city', inner: 'library' }, O: { outer: 'city', inner: 'toystore' },
-    K: { outer: 'city', inner: 'cafe' },
+    K: { outer: 'city', inner: 'cafe' },   '>': { outer: 'city', inner: 'rollerpark' },
     X: { outer: 'farm', inner: 'barn' },
   };
   // outdoor<->outdoor links (bus stops): walk onto `ch` to ride between maps

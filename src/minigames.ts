@@ -1053,6 +1053,411 @@ export const Minigames = (() => {
     resultSub() { return this.score + ' of 5 cookies decorated!'; }
   }
 
+  /* ================= CITY : Roller Lab ================= */
+  interface RollerLevel { name: string; rows: string[]; }
+  const ROLL_LEVELS: RollerLevel[] = [
+    {
+      name: 'Star Ramp',
+      rows: [
+        '#############',
+        '#S....*....G#',
+        '#.###.###.#.#',
+        '#.....#.....#',
+        '#.###...###.#',
+        '#.....*.....#',
+        '#############',
+      ],
+    },
+    {
+      name: 'Key Garden',
+      rows: [
+        '#############',
+        '#S...#.....G#',
+        '#.##.#.###D##',
+        '#....#...#..#',
+        '#.######.#*.#',
+        '#......K....#',
+        '#############',
+      ],
+    },
+    {
+      name: 'Tiny Switchback',
+      rows: [
+        '#############',
+        '#S..*......G#',
+        '###.#####D###',
+        '#...#.......#',
+        '#.###.#####.#',
+        '#.....K..*..#',
+        '#############',
+      ],
+    },
+  ];
+  const ROLL_CUSTOM_START = [
+    '#############',
+    '#S....*....G#',
+    '#...........#',
+    '#.....#.....#',
+    '#...........#',
+    '#...........#',
+    '#############',
+  ];
+  const ROLL_PALETTE = ['.', '#', '*', 'K', 'D', 'G', 'S'];
+  const ROLL_NAMES: Record<string, string> = {
+    '.': 'path', '#': 'wall', '*': 'star', K: 'key', D: 'gate', G: 'goal', S: 'start',
+  };
+
+  class RollerLabMinigame extends BaseMinigame {
+    menuSel: number;
+    mode: 'trail' | 'custom';
+    level: number;
+    solved: number;
+    grid: string[];
+    custom: string[];
+    w: number;
+    h: number;
+    ballX: number;
+    ballY: number;
+    vx: number;
+    vy: number;
+    starsGot: number;
+    starsTotal: number;
+    hasKey: boolean;
+    cursorX: number;
+    cursorY: number;
+    msg: string;
+    msgT: number;
+    levelT: number;
+    helperUsed: boolean;
+    constructor(done: MinigameDone) {
+      super(done);
+      this.menuSel = 0;
+      this.mode = 'trail';
+      this.level = 0;
+      this.solved = 0;
+      this.grid = [];
+      this.custom = ROLL_CUSTOM_START.slice();
+      this.w = 0;
+      this.h = 0;
+      this.ballX = 1.5;
+      this.ballY = 1.5;
+      this.vx = 0;
+      this.vy = 0;
+      this.starsGot = 0;
+      this.starsTotal = 0;
+      this.hasKey = false;
+      this.cursorX = 1;
+      this.cursorY = 1;
+      this.msg = '';
+      this.msgT = 0;
+      this.levelT = 0;
+      this.helperUsed = false;
+    }
+    key(act: string) {
+      if (this.phase === 'intro') {
+        if (act === 'left' || act === 'right') { this.menuSel = 1 - this.menuSel; AudioSys.sfx('blip'); }
+        else if (act === 'action') {
+          if (this.menuSel === 0) this.start();
+          else this.startEditor();
+        }
+        return;
+      }
+      if (this.phase === 'edit') {
+        if (act === 'left') { this.cursorX = Math.max(1, this.cursorX - 1); AudioSys.sfx('blip'); }
+        else if (act === 'right') { this.cursorX = Math.min(this.custom[0].length - 2, this.cursorX + 1); AudioSys.sfx('blip'); }
+        else if (act === 'up') { this.cursorY = Math.max(1, this.cursorY - 1); AudioSys.sfx('blip'); }
+        else if (act === 'down') { this.cursorY = Math.min(this.custom.length - 2, this.cursorY + 1); AudioSys.sfx('blip'); }
+        else if (act === 'action') this.cycleTile();
+        else if (act === 'back') this.startCustomTest();
+        return;
+      }
+      super.key(act);
+    }
+    start() {
+      this.mode = 'trail';
+      this.level = 0;
+      this.solved = 0;
+      this.startLevel(ROLL_LEVELS[0].rows);
+      AudioSys.sfx('confirm');
+    }
+    startEditor() {
+      this.phase = 'edit';
+      this.cursorX = 1;
+      this.cursorY = 1;
+      this.msg = 'Make a rolling maze';
+      this.msgT = 2.2;
+      AudioSys.sfx('confirm');
+    }
+    startCustomTest() {
+      this.ensureCustomEndpoints();
+      this.mode = 'custom';
+      this.startLevel(this.custom);
+      this.msg = 'Testing your map!';
+      this.msgT = 2.4;
+      AudioSys.sfx('confirm');
+    }
+    startLevel(rows: string[]) {
+      this.phase = 'play';
+      this.grid = rows.map(r => r);
+      this.w = this.grid[0].length;
+      this.h = this.grid.length;
+      const s = this.findTile('S') || { x: 1, y: 1 };
+      this.ballX = s.x + 0.5;
+      this.ballY = s.y + 0.5;
+      this.vx = 0;
+      this.vy = 0;
+      this.starsGot = 0;
+      this.starsTotal = this.countTile('*');
+      this.hasKey = false;
+      this.levelT = 0;
+      this.helperUsed = false;
+      this.msg = this.mode === 'trail' ? ROLL_LEVELS[this.level].name : 'Your maze';
+      this.msgT = 2.2;
+    }
+    findTile(ch: string) {
+      for (let y = 0; y < this.grid.length; y++) {
+        const x = this.grid[y].indexOf(ch);
+        if (x >= 0) return { x, y };
+      }
+      return null;
+    }
+    countTile(ch: string) {
+      let n = 0;
+      for (const row of this.grid) for (const c of row) if (c === ch) n++;
+      return n;
+    }
+    setGrid(x: number, y: number, ch: string) {
+      this.grid[y] = this.grid[y].slice(0, x) + ch + this.grid[y].slice(x + 1);
+    }
+    setCustom(x: number, y: number, ch: string) {
+      this.custom[y] = this.custom[y].slice(0, x) + ch + this.custom[y].slice(x + 1);
+    }
+    cycleTile() {
+      const cur = this.custom[this.cursorY][this.cursorX];
+      const next = ROLL_PALETTE[(Math.max(0, ROLL_PALETTE.indexOf(cur)) + 1) % ROLL_PALETTE.length];
+      if (next === 'S' || next === 'G') {
+        this.custom = this.custom.map(row => row.replace(next, '.'));
+      }
+      this.setCustom(this.cursorX, this.cursorY, next);
+      this.msg = ROLL_NAMES[next];
+      this.msgT = 1.4;
+      AudioSys.sfx('pop');
+    }
+    ensureCustomEndpoints() {
+      if (!this.custom.some(r => r.includes('S'))) this.setCustom(1, 1, 'S');
+      if (!this.custom.some(r => r.includes('G'))) this.setCustom(this.custom[0].length - 2, 1, 'G');
+    }
+    handleInput(act: string) {
+      if (this.phase !== 'play') return;
+      if (act === 'action') { this.vx *= 0.35; this.vy *= 0.35; AudioSys.sfx('blip'); return; }
+      if (act === 'back') {
+        if (this.mode === 'custom') { this.phase = 'edit'; AudioSys.sfx('blip'); }
+        else { this.phase = 'intro'; AudioSys.sfx('blip'); }
+        return;
+      }
+      const push = 2.3;
+      if (act === 'left') this.vx -= push;
+      else if (act === 'right') this.vx += push;
+      else if (act === 'up') this.vy -= push;
+      else if (act === 'down') this.vy += push;
+      else return;
+      const sp = Math.hypot(this.vx, this.vy);
+      if (sp > 5.4) { this.vx = this.vx / sp * 5.4; this.vy = this.vy / sp * 5.4; }
+      AudioSys.sfx('blip');
+    }
+    updatePlay(dt: number) {
+      if (this.phase !== 'play') {
+        this.msgT = Math.max(0, this.msgT - dt);
+        return;
+      }
+      this.levelT += dt;
+      this.msgT = Math.max(0, this.msgT - dt);
+      const drag = Math.pow(0.72, dt * 5);
+      this.vx *= drag;
+      this.vy *= drag;
+      const sub = Math.max(1, Math.ceil(dt / 0.018));
+      const step = dt / sub;
+      for (let i = 0; i < sub; i++) this.stepBall(step);
+      this.visitTile();
+      if (this.mode === 'trail' && this.levelT > 70 && !this.helperUsed) {
+        this.helperUsed = true;
+        this.msg = 'The park helper opens a shortcut!';
+        this.complete(1, false);
+      }
+    }
+    stepBall(dt: number) {
+      const nx = this.ballX + this.vx * dt;
+      if (!this.collides(nx, this.ballY)) this.ballX = nx;
+      else this.vx *= -0.22;
+      const ny = this.ballY + this.vy * dt;
+      if (!this.collides(this.ballX, ny)) this.ballY = ny;
+      else this.vy *= -0.22;
+    }
+    collides(x: number, y: number) {
+      const r = 0.28;
+      for (let ty = Math.floor(y - r); ty <= Math.floor(y + r); ty++) {
+        for (let tx = Math.floor(x - r); tx <= Math.floor(x + r); tx++) {
+          if (!this.solidAt(tx, ty)) continue;
+          if (x + r > tx && x - r < tx + 1 && y + r > ty && y - r < ty + 1) return true;
+        }
+      }
+      return false;
+    }
+    solidAt(x: number, y: number) {
+      if (x < 0 || y < 0 || y >= this.h || x >= this.w) return true;
+      const ch = this.grid[y][x];
+      return ch === '#' || (ch === 'D' && !this.hasKey);
+    }
+    visitTile() {
+      const x = Math.floor(this.ballX), y = Math.floor(this.ballY);
+      if (x < 0 || y < 0 || y >= this.h || x >= this.w) return;
+      const ch = this.grid[y][x];
+      if (ch === '*') {
+        this.starsGot++;
+        this.setGrid(x, y, '.');
+        this.msg = 'Star collected!';
+        this.msgT = 1.3;
+        AudioSys.sfx('star');
+      } else if (ch === 'K') {
+        this.hasKey = true;
+        this.setGrid(x, y, '.');
+        this.msg = 'Gate key!';
+        this.msgT = 1.5;
+        AudioSys.sfx('sparkle');
+      } else if (ch === 'G') {
+        if (this.starsGot >= this.starsTotal) this.finishLevel();
+        else {
+          this.msg = 'Find the stars first!';
+          this.msgT = 1.1;
+        }
+      }
+    }
+    finishLevel() {
+      AudioSys.sfx('fanfare');
+      if (this.mode === 'custom') {
+        this.solved = 1;
+        this.complete(3, true);
+        return;
+      }
+      this.solved++;
+      if (this.level < ROLL_LEVELS.length - 1) {
+        this.level++;
+        this.startLevel(ROLL_LEVELS[this.level].rows);
+      } else {
+        this.complete(3, true);
+      }
+    }
+    draw(g: Ctx) {
+      const W = g.canvas.width, H = g.canvas.height;
+      this.drawPark(g, W, H);
+      if (this.phase === 'intro') { this.drawMenu(g, W, H); return; }
+      if (this.phase === 'result') {
+        resultScreen(g, W, H, this.mode === 'custom' ? 'Maze tested!' : 'Roller Lab complete!',
+          this.mode === 'custom' ? 'Your marble found the goal!' : this.solved + ' of ' + ROLL_LEVELS.length + ' mazes solved!',
+          this.stars, this.rt);
+        return;
+      }
+      if (this.phase === 'edit') { this.drawEditor(g, W, H); return; }
+      this.drawPlay(g, W, H);
+    }
+    drawPark(g: Ctx, W: number, H: number) {
+      g.fillStyle = '#d8f2ee'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#f3d29a'; g.fillRect(0, H - 145, W, 145);
+      g.fillStyle = '#b86a8a'; rr(g, 80, 68, 250, 60, 18); g.fill();
+      label(g, 'Wonder Roll Park', 205, 100, 25, '#fff8ee');
+      g.fillStyle = '#ff9ec5'; rr(g, W - 230, 60, 150, 95, 20); g.fill();
+      g.fillStyle = '#7fb8e8'; g.beginPath(); g.arc(W - 155, 108, 35, 0, 7); g.fill();
+      g.fillStyle = '#ffd95f'; g.beginPath(); g.arc(W - 155, 108, 17, 0, 7); g.fill();
+    }
+    drawMenu(g: Ctx, W: number, H: number) {
+      panel(g, W / 2 - 365, 195, 730, 340, '#fff8ee');
+      label(g, 'Roller Lab', W / 2, 250, 42, '#b85c8a');
+      label(g, 'Roll the marble through tiny logic mazes.', W / 2, 302, 22, '#5a4a6a');
+      const cards = [
+        ['Puzzle Trail', 'Three gentle marble mazes'],
+        ['Map Maker', 'Build a maze and test it'],
+      ];
+      for (let i = 0; i < 2; i++) {
+        const x = W / 2 + (i - 0.5) * 260;
+        const y = 395;
+        const sel = i === this.menuSel;
+        panel(g, x - 110, y - 58 + (sel ? -8 : 0), 220, 116, sel ? '#fff' : '#f7efe4');
+        if (sel) { rr(g, x - 110, y - 66, 220, 116, 18); g.strokeStyle = '#ffb84f'; g.lineWidth = 5; g.stroke(); }
+        label(g, cards[i][0], x, y - 20 + (sel ? -8 : 0), 24, '#7a4a9a');
+        label(g, cards[i][1], x, y + 22 + (sel ? -8 : 0), 17, '#5a4a6a');
+      }
+      label(g, 'Use ← → to choose · Press E!', W / 2, 493, 21, '#b85c8a');
+      sprite(g, 'starry', 'down', Math.floor(this.t * 2) % 2 ? 1 : 2, W / 2, H - 25, 4);
+    }
+    drawPlay(g: Ctx, W: number, H: number) {
+      const title = this.mode === 'trail' ? ROLL_LEVELS[this.level].name : 'Testing your map';
+      label(g, title, W / 2, 62, 32, '#7a4a9a');
+      label(g, 'Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
+      this.drawGrid(g, this.grid, W / 2, 176, true);
+      if (this.msgT > 0) label(g, this.msg, W / 2, H - 78, 24, '#5a4a6a');
+      label(g, 'Tap arrows to roll · E slows the marble', W / 2, H - 38, 18, '#7a6a8a');
+    }
+    drawEditor(g: Ctx, W: number, H: number) {
+      label(g, 'Map Maker', W / 2, 62, 34, '#7a4a9a');
+      label(g, 'Move the cursor, stamp pieces, then test your maze.', W / 2, 105, 20, '#5a4a6a');
+      this.drawGrid(g, this.custom, W / 2, 150, false);
+      const cell = this.cellSize(this.custom);
+      const ox = W / 2 - this.custom[0].length * cell / 2;
+      const oy = 150;
+      g.strokeStyle = '#ffb84f'; g.lineWidth = 5;
+      rr(g, ox + this.cursorX * cell + 3, oy + this.cursorY * cell + 3, cell - 6, cell - 6, 8); g.stroke();
+      const py = H - 118;
+      for (let i = 0; i < ROLL_PALETTE.length; i++) {
+        const x = W / 2 - 240 + i * 80;
+        this.drawRollTile(g, ROLL_PALETTE[i], x - 24, py - 24, 48);
+        label(g, ROLL_NAMES[ROLL_PALETTE[i]], x, py + 38, 13, '#5a4a6a');
+      }
+      const cur = this.custom[this.cursorY][this.cursorX];
+      if (this.msgT > 0) label(g, this.msg, W / 2, H - 64, 21, '#b85c8a');
+      label(g, 'Current: ' + ROLL_NAMES[cur] + '   ·   E changes tile   ·   Esc tests', W / 2, H - 34, 18, '#7a6a8a');
+    }
+    cellSize(rows: string[]) {
+      return Math.min(58, Math.floor(560 / rows[0].length));
+    }
+    drawGrid(g: Ctx, rows: string[], cx: number, top: number, withBall: boolean) {
+      const cell = this.cellSize(rows);
+      const ox = cx - rows[0].length * cell / 2;
+      panel(g, ox - 16, top - 16, rows[0].length * cell + 32, rows.length * cell + 32, '#fff8ee');
+      for (let y = 0; y < rows.length; y++) {
+        for (let x = 0; x < rows[y].length; x++) {
+          this.drawRollTile(g, rows[y][x], ox + x * cell, top + y * cell, cell);
+        }
+      }
+      if (withBall) {
+        const bx = ox + this.ballX * cell, by = top + this.ballY * cell;
+        g.fillStyle = '#9a7ad0'; g.beginPath(); g.arc(bx, by, cell * .28, 0, 7); g.fill();
+        g.fillStyle = '#cdb0ee'; g.beginPath(); g.arc(bx - cell * .09, by - cell * .1, cell * .09, 0, 7); g.fill();
+      }
+    }
+    drawRollTile(g: Ctx, ch: string, x: number, y: number, cell: number) {
+      g.fillStyle = '#d9f2e7'; rr(g, x + 1, y + 1, cell - 2, cell - 2, 8); g.fill();
+      if (ch === '#') {
+        g.fillStyle = '#7a6a8a'; rr(g, x + 2, y + 2, cell - 4, cell - 4, 7); g.fill();
+      } else if (ch === '*') {
+        starPath(g, x + cell / 2, y + cell / 2, cell * .27); g.fillStyle = '#ffd95f'; g.fill();
+      } else if (ch === 'K') {
+        g.fillStyle = '#ffb84f'; g.beginPath(); g.arc(x + cell * .43, y + cell * .5, cell * .16, 0, 7); g.fill();
+        g.fillRect(x + cell * .52, y + cell * .47, cell * .24, cell * .08);
+        g.fillRect(x + cell * .68, y + cell * .5, cell * .06, cell * .13);
+      } else if (ch === 'D') {
+        g.fillStyle = this.hasKey ? 'rgba(154,219,122,.45)' : '#d8a45f';
+        rr(g, x + cell * .2, y + cell * .15, cell * .6, cell * .7, 8); g.fill();
+        label(g, this.hasKey ? 'open' : 'gate', x + cell / 2, y + cell / 2, Math.max(10, cell * .18), '#5a4a6a');
+      } else if (ch === 'G') {
+        g.fillStyle = '#7fb8e8'; rr(g, x + cell * .18, y + cell * .2, cell * .64, cell * .6, 10); g.fill();
+        label(g, 'GO', x + cell / 2, y + cell / 2, Math.max(14, cell * .28), '#fff8ee');
+      } else if (ch === 'S') {
+        g.fillStyle = '#ff9ec5'; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, cell * .22, 0, 7); g.fill();
+      }
+      g.strokeStyle = 'rgba(120,90,120,.18)'; g.lineWidth = 1; g.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
+    }
+  }
+
   /* ================= BEACH : Shell Splash ================= */
   class ShellsMinigame extends BaseMinigame {
     total: number;
@@ -1615,6 +2020,11 @@ export const Minigames = (() => {
     label: 'Cookie Helper', energy: 6, minutes: 20, minEnergy: 5,
     keys: ['left', 'right', 'action'],
     description: 'Decorate warm bakery cookies with Mrs. Honey by matching toppings.',
+  });
+  api.register('rollerlab', RollerLabMinigame, {
+    label: 'Roller Lab', energy: 10, minutes: 35, minEnergy: 10,
+    keys: ['left', 'right', 'up', 'down', 'action'],
+    description: 'Roll a marble through logic mazes or build and test a tiny custom map.',
   });
   api.register('shells', ShellsMinigame, {
     label: 'Shell Splash', keys: ['left', 'right'],
