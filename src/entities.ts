@@ -104,6 +104,7 @@ export const Entities = (() => {
       id: 'honey', name: 'Mrs. Honey', sprite: 'honey', radius: 1, shop: true, bakery: true,
       shopName: 'Mrs. Honey', greeting: 'Fresh from the oven, little Starry! What smells good?',
       stock: ['muffin', 'cocoa', 'pretzel'],
+      freeGames: [{ game: 'cookiehelper', label: 'Help decorate cookies' }],
       where: () => ({ map: 'cafe', x: 5, y: 1 }),
       talk: () => [],
     },

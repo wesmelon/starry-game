@@ -108,8 +108,8 @@ stop to ride, and onto the matching stop to ride home again:
   **picture book** of Starry's very own.
 - **Buy toys** at Tippy Top Toys: a huggy teddy, a wind-up froggy, a bouncy
   ball. Every toy you bring home appears on Starry's bedroom floor.
-- **Buy a bakery treat** — muffins, cozy cocoa, and twisty pretzels — from
-  Mrs. Honey at the Honey Bun Bakery.
+- **Buy a bakery treat** — muffins, cozy cocoa, and twisty pretzels — or
+  help Mrs. Honey decorate cookies at the Honey Bun Bakery.
 - **Ride the carousel**, grab a **balloon** from the cart, play **Balloon
   Bop**, and **make a wish** at the plaza fountain.
 - **Hop the sidewalk hopscotch**, play alphabet **Hopscotch Hero**, **blow bubbles**

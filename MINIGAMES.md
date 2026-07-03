@@ -214,6 +214,7 @@ reference.
 | `art` | Painting Time | Mr. Doodle, weekends (class) |
 | `math` | Number Time | Ms. Bloom, `freeGames` |
 | `stampstudio` | Stamp Studio | Mr. Doodle, `freeGames` |
+| `cookiehelper` | Cookie Helper | Mrs. Honey, `freeGames` in the bakery shop menu |
 | `shells` | Shell Splash | Sandy at the beach |
 | `veggies` | Veggie Round-up | Farmer Fern |
 | `bubblepop` | Bubble Pop | city bubble-stand tile |

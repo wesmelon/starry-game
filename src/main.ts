@@ -232,11 +232,15 @@ export const Game = (() => {
       .filter((it): it is NonNullable<typeof it> => !!it)
       .filter(it => !(it.toy && G.toys.includes(it.id)));   // each toy comes home once
     const opts: ChoiceOpt[] = stock.map(it => ({ label: it.name + '  (' + it.cost + '★)', value: it.id }));
+    for (const game of npc.freeGames || []) {
+      opts.push({ label: game.label || funGameInfo(game.game).label, value: '__game:' + game.game });
+    }
     if (npc.story) opts.push({ label: 'Read a story ♪', value: '__story' });
     opts.push({ label: 'Just looking!', value: null });
     const who = npc.shopName || npc.name;
     UI.choose(who, npc.greeting || 'What would you like?', opts, (val) => {
       if (val === '__story') return storyTime(npc);
+      if (val && val.startsWith('__game:')) return startFunGame(npc, val.slice(7));
       if (!val) return;
       const it = Entities.SHOP_ITEMS.find(i => i.id === val);
       if (!it) return;
