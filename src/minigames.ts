@@ -1057,53 +1057,97 @@ export const Minigames = (() => {
   interface RollerLevel { name: string; rows: string[]; }
   const ROLL_LEVELS: RollerLevel[] = [
     {
-      name: 'Star Ramp',
+      name: 'Two-Floor Drop',
       rows: [
-        '#############',
-        '#...........#',
-        '#...........#',
-        '#...........#',
-        '#...........#',
-        '#S...*....G.#',
-        '#############',
+        '###############',
+        '#S..*.........#',
+        '######...######',
+        '#.............#',
+        '#.....*.......#',
+        '#..#########..#',
+        '#...........G.#',
+        '###############',
       ],
     },
     {
       name: 'Key Garden',
       rows: [
-        '#############',
-        '#...........#',
-        '#...........#',
-        '#...........#',
-        '#...........#',
-        '#S...K.D.*G.#',
-        '#############',
+        '###############',
+        '#S..K.........#',
+        '######...######',
+        '#.............#',
+        '#....*....D...#',
+        '#..#########..#',
+        '#..........G..#',
+        '###############',
       ],
     },
     {
       name: 'Tiny Switchback',
       rows: [
-        '#############',
-        '#...........#',
-        '#...........#',
-        '#...........#',
-        '#...........#',
-        '#S..*..K.DG.#',
-        '#############',
+        '###############',
+        '#S..........*.#',
+        '#####..########',
+        '#.............#',
+        '#..*.....K....#',
+        '#..########..D#',
+        '#............G#',
+        '###############',
+      ],
+    },
+    {
+      name: 'Balcony Bounce',
+      rows: [
+        '###############',
+        '#S............#',
+        '#######..######',
+        '#.......*.....#',
+        '#..#######....#',
+        '#...K.....D...#',
+        '#..#########G.#',
+        '###############',
+      ],
+    },
+    {
+      name: 'Star Basement',
+      rows: [
+        '###############',
+        '#S..*.........#',
+        '#..######..####',
+        '#.............#',
+        '####..#########',
+        '#...K.....*..G#',
+        '#..#########D##',
+        '###############',
+      ],
+    },
+    {
+      name: 'Wonder Tower',
+      rows: [
+        '###############',
+        '#S....*.......#',
+        '########..#####',
+        '#............K#',
+        '#..#########..#',
+        '#.....*...D...#',
+        '#..#########G.#',
+        '###############',
       ],
     },
   ];
   const ROLL_CUSTOM_START = [
-    '#############',
-    '#...........#',
-    '#...........#',
-    '#...........#',
-    '#...........#',
-    '#S....*...G.#',
-    '#############',
+    '###############',
+    '#S....*.......#',
+    '######...######',
+    '#.............#',
+    '#.............#',
+    '#..#########..#',
+    '#..........G..#',
+    '###############',
   ];
   const ROLL_GRAVITY = 9.4;
   const ROLL_MAX_SPEED = 7.0;
+  const ROLL_ACCEL = 10.5;
   const ROLL_PALETTE = ['.', '#', '*', 'K', 'D', 'G', 'S'];
   const ROLL_NAMES: Record<string, string> = {
     '.': 'path', '#': 'wall', '*': 'star', K: 'key', D: 'gate', G: 'goal', S: 'start',
@@ -1132,6 +1176,9 @@ export const Minigames = (() => {
     levelT: number;
     helperUsed: boolean;
     helped: number;
+    rollIntent: number;
+    rollT: number;
+    spin: number;
     constructor(done: MinigameDone) {
       super(done);
       this.menuSel = 0;
@@ -1156,6 +1203,9 @@ export const Minigames = (() => {
       this.levelT = 0;
       this.helperUsed = false;
       this.helped = 0;
+      this.rollIntent = 0;
+      this.rollT = 0;
+      this.spin = 0;
     }
     key(act: string) {
       if (this.phase === 'intro') {
@@ -1219,6 +1269,8 @@ export const Minigames = (() => {
       this.hasKey = false;
       this.levelT = 0;
       this.helperUsed = false;
+      this.rollIntent = 0;
+      this.rollT = 0;
       this.msg = this.mode === 'trail' ? ROLL_LEVELS[this.level].name : 'Your maze';
       this.msgT = 2.2;
     }
@@ -1283,11 +1335,12 @@ export const Minigames = (() => {
         else { this.phase = 'intro'; AudioSys.sfx('blip'); }
         return;
       }
-      const push = 2.25;
-      if (act === 'left') this.vx -= push;
-      else if (act === 'right') this.vx += push;
+      if (act === 'left' || act === 'right') {
+        this.rollIntent = act === 'left' ? -1 : 1;
+        this.rollT = 0.48;
+      }
       else if (act === 'up') {
-        if (this.isGrounded()) { this.vy = -5.2; AudioSys.sfx('pop'); }
+        if (this.isGrounded()) { this.vy = -5.6; AudioSys.sfx('pop'); }
         return;
       }
       else if (act === 'down') this.vy += 3.2;
@@ -1303,9 +1356,14 @@ export const Minigames = (() => {
       this.levelT += dt;
       this.msgT = Math.max(0, this.msgT - dt);
       this.vy += ROLL_GRAVITY * dt;
+      if (this.rollT > 0) {
+        this.vx += this.rollIntent * ROLL_ACCEL * dt * (this.isGrounded() ? 1 : 0.55);
+        this.rollT = Math.max(0, this.rollT - dt);
+      }
       this.limitSpeed();
-      const drag = Math.pow(0.75, dt * 5);
+      const drag = Math.pow(this.isGrounded() ? 0.82 : 0.96, dt * 5);
       this.vx *= drag;
+      this.spin += this.vx * dt * 3.8;
       const sub = Math.max(1, Math.ceil(dt / 0.018));
       const step = dt / sub;
       for (let i = 0; i < sub; i++) this.stepBall(step);
@@ -1380,7 +1438,7 @@ export const Minigames = (() => {
         this.complete(3, true);
         return;
       }
-      if (!viaHelper) this.solved++;
+      this.solved++;
       if (this.level < ROLL_LEVELS.length - 1) {
         this.level++;
         this.startLevel(ROLL_LEVELS[this.level].rows);
@@ -1415,7 +1473,7 @@ export const Minigames = (() => {
       label(g, 'Roller Lab', W / 2, 250, 42, '#b85c8a');
       label(g, 'Gravity tugs the marble through tiny logic mazes.', W / 2, 302, 22, '#5a4a6a');
       const cards = [
-        ['Puzzle Trail', 'Three gentle marble mazes'],
+        ['Puzzle Trail', 'Six gravity mazes'],
         ['Map Maker', 'Build a maze and test it'],
       ];
       for (let i = 0; i < 2; i++) {
@@ -1433,7 +1491,7 @@ export const Minigames = (() => {
     drawPlay(g: Ctx, W: number, H: number) {
       const title = this.mode === 'trail' ? ROLL_LEVELS[this.level].name : 'Testing your map';
       label(g, title, W / 2, 62, 32, '#7a4a9a');
-      label(g, 'Gravity pulls down   ·   Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
+      label(g, 'Floor ' + (this.level + 1) + '/' + ROLL_LEVELS.length + '   ·   Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
       this.drawGrid(g, this.grid, W / 2, 176, true);
       if (this.msgT > 0) label(g, this.msg, W / 2, H - 78, 24, '#5a4a6a');
       label(g, '← → roll · ↑ hops · ↓ drops · E slows', W / 2, H - 38, 18, '#7a6a8a');
@@ -1477,6 +1535,11 @@ export const Minigames = (() => {
         const bx = ox + this.ballX * cell, by = top + this.ballY * cell;
         g.fillStyle = '#9a7ad0'; g.beginPath(); g.arc(bx, by, cell * .28, 0, 7); g.fill();
         g.fillStyle = '#cdb0ee'; g.beginPath(); g.arc(bx - cell * .09, by - cell * .1, cell * .09, 0, 7); g.fill();
+        g.strokeStyle = 'rgba(255,255,255,.78)'; g.lineWidth = Math.max(2, cell * .05);
+        g.beginPath();
+        g.moveTo(bx, by);
+        g.lineTo(bx + Math.cos(this.spin) * cell * .23, by + Math.sin(this.spin) * cell * .23);
+        g.stroke();
       }
     }
     drawRollTile(g: Ctx, ch: string, x: number, y: number, cell: number) {
@@ -2069,7 +2132,7 @@ export const Minigames = (() => {
   api.register('rollerlab', RollerLabMinigame, {
     label: 'Roller Lab', energy: 10, minutes: 35, minEnergy: 10,
     keys: ['left', 'right', 'up', 'down', 'action'],
-    description: 'Roll a gravity-pulled marble through logic mazes or build and test a tiny custom map.',
+    description: 'Roll a gravity-pulled marble through six floor mazes or build and test a tiny custom map.',
   });
   api.register('shells', ShellsMinigame, {
     label: 'Shell Splash', keys: ['left', 'right'],
