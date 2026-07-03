@@ -1129,6 +1129,7 @@ export const Minigames = (() => {
     msgT: number;
     levelT: number;
     helperUsed: boolean;
+    helped: number;
     constructor(done: MinigameDone) {
       super(done);
       this.menuSel = 0;
@@ -1152,6 +1153,7 @@ export const Minigames = (() => {
       this.msgT = 0;
       this.levelT = 0;
       this.helperUsed = false;
+      this.helped = 0;
     }
     key(act: string) {
       if (this.phase === 'intro') {
@@ -1159,6 +1161,9 @@ export const Minigames = (() => {
         else if (act === 'action') {
           if (this.menuSel === 0) this.start();
           else this.startEditor();
+        } else if (act === 'back') {
+          // always-available exit so nobody is ever stuck in the park
+          this.complete(Math.max(1, Math.min(3, this.solved)), false);
         }
         return;
       }
@@ -1182,6 +1187,7 @@ export const Minigames = (() => {
     }
     startEditor() {
       this.phase = 'edit';
+      this.hasKey = false;   // so gates draw closed in the editor
       this.cursorX = 1;
       this.cursorY = 1;
       this.msg = 'Make a rolling maze';
@@ -1244,8 +1250,28 @@ export const Minigames = (() => {
       AudioSys.sfx('pop');
     }
     ensureCustomEndpoints() {
-      if (!this.custom.some(r => r.includes('S'))) this.setCustom(1, 1, 'S');
-      if (!this.custom.some(r => r.includes('G'))) this.setCustom(this.custom[0].length - 2, 1, 'G');
+      // drop missing markers on open path tiles so they never squash
+      // each other (or end up buried in a wall)
+      const openSpot = (fromEnd: boolean) => {
+        const ys = [...this.custom.keys()];
+        if (fromEnd) ys.reverse();
+        for (const y of ys) {
+          const row = this.custom[y];
+          for (let i = 1; i < row.length - 1; i++) {
+            const x = fromEnd ? row.length - 1 - i : i;
+            if (row[x] === '.') return { x, y };
+          }
+        }
+        return fromEnd ? { x: this.custom[0].length - 2, y: 1 } : { x: 1, y: 1 };
+      };
+      if (!this.custom.some(r => r.includes('S'))) {
+        const p = openSpot(false);
+        this.setCustom(p.x, p.y, 'S');
+      }
+      if (!this.custom.some(r => r.includes('G'))) {
+        const p = openSpot(true);
+        this.setCustom(p.x, p.y, 'G');
+      }
     }
     handleInput(act: string) {
       if (this.phase !== 'play') return;
@@ -1281,8 +1307,10 @@ export const Minigames = (() => {
       this.visitTile();
       if (this.mode === 'trail' && this.levelT > 70 && !this.helperUsed) {
         this.helperUsed = true;
-        this.msg = 'The park helper opens a shortcut!';
-        this.complete(1, false);
+        this.helped++;
+        AudioSys.sfx('sparkle');
+        this.finishLevel(true);
+        if (this.phase === 'play') { this.msg = 'The park helper rolls the marble ahead!'; this.msgT = 2.6; }
       }
     }
     stepBall(dt: number) {
@@ -1326,25 +1354,26 @@ export const Minigames = (() => {
         AudioSys.sfx('sparkle');
       } else if (ch === 'G') {
         if (this.starsGot >= this.starsTotal) this.finishLevel();
-        else {
+        else if (this.msgT <= 0.2) {
           this.msg = 'Find the stars first!';
           this.msgT = 1.1;
+          AudioSys.sfx('deny');
         }
       }
     }
-    finishLevel() {
-      AudioSys.sfx('fanfare');
+    finishLevel(viaHelper = false) {
+      AudioSys.sfx(viaHelper ? 'yay' : 'fanfare');
       if (this.mode === 'custom') {
         this.solved = 1;
         this.complete(3, true);
         return;
       }
-      this.solved++;
+      if (!viaHelper) this.solved++;
       if (this.level < ROLL_LEVELS.length - 1) {
         this.level++;
         this.startLevel(ROLL_LEVELS[this.level].rows);
       } else {
-        this.complete(3, true);
+        this.complete(Math.max(1, 3 - this.helped), this.helped === 0);
       }
     }
     draw(g: Ctx) {
@@ -1386,7 +1415,7 @@ export const Minigames = (() => {
         label(g, cards[i][0], x, y - 20 + (sel ? -8 : 0), 24, '#7a4a9a');
         label(g, cards[i][1], x, y + 22 + (sel ? -8 : 0), 17, '#5a4a6a');
       }
-      label(g, 'Use ← → to choose · Press E!', W / 2, 493, 21, '#b85c8a');
+      label(g, 'Use ← → to choose · E picks · Esc when you\'re all done', W / 2, 493, 21, '#b85c8a');
       sprite(g, 'starry', 'down', Math.floor(this.t * 2) % 2 ? 1 : 2, W / 2, H - 25, 4);
     }
     drawPlay(g: Ctx, W: number, H: number) {
@@ -1407,12 +1436,16 @@ export const Minigames = (() => {
       g.strokeStyle = '#ffb84f'; g.lineWidth = 5;
       rr(g, ox + this.cursorX * cell + 3, oy + this.cursorY * cell + 3, cell - 6, cell - 6, 8); g.stroke();
       const py = H - 118;
+      const cur = this.custom[this.cursorY][this.cursorX];
       for (let i = 0; i < ROLL_PALETTE.length; i++) {
         const x = W / 2 - 240 + i * 80;
+        if (ROLL_PALETTE[i] === cur) {
+          rr(g, x - 30, py - 30, 60, 60, 12);
+          g.fillStyle = 'rgba(255,184,79,.35)'; g.fill();
+        }
         this.drawRollTile(g, ROLL_PALETTE[i], x - 24, py - 24, 48);
         label(g, ROLL_NAMES[ROLL_PALETTE[i]], x, py + 38, 13, '#5a4a6a');
       }
-      const cur = this.custom[this.cursorY][this.cursorX];
       if (this.msgT > 0) label(g, this.msg, W / 2, H - 64, 21, '#b85c8a');
       label(g, 'Current: ' + ROLL_NAMES[cur] + '   ·   E changes tile   ·   Esc tests', W / 2, H - 34, 18, '#7a6a8a');
     }
