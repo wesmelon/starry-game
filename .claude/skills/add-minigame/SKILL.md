@@ -11,12 +11,16 @@ with a smoke-verified worked example.
 
 ## The five steps
 
-1. Write a class in `src/minigames.ts` extending `BaseMinigame` (or
-   `ChoiceQuizMinigame` for three-card quizzes — see below). Strict
-   TypeScript: declare every field.
-2. Register it at the bottom of the file with the other
-   `api.register(...)` calls — **this is the only integration point**;
-   launchers read the economics from it and the smoke test reads `keys`:
+1. Create `src/minigames/<id>.ts` exporting your class, extending
+   `BaseMinigame` (or `ChoiceQuizMinigame` for three-card quizzes — see
+   below). Import the base and drawing helpers from `./shared`, and
+   `AudioSys`/`SpriteLib` from `../audio`/`../sprites` — copy the import
+   lines of `src/minigames/shells.ts`. Strict TypeScript: declare every
+   field.
+2. Register it in `src/minigames.ts` (the registry file): import your
+   class and add an `api.register(...)` call beside the others —
+   **this is the only integration point**; launchers read the economics
+   from it and the smoke test reads `keys`:
 
    ```ts
    api.register('mygame', MyGameMinigame, {

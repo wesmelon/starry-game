@@ -21,7 +21,7 @@ validators. No runtime dependencies.
 | `sprites.ts` | `SpriteLib` | every tile painter (`PAINT`), character/animal pixel templates, sticker icons (`ICONS`), canvas cache built once by `build()` |
 | `maps.ts` | `Maps` | map grids (`DATA`), solidity (`SOLID`), doors (`DOORS`), bus links (`LINKS`), warp resolution (`init()`/`warpAt`) |
 | `entities.ts` | `Entities` | `NPCS` (schedules + dialogue), `ANIMALS`, `STICKERS`, `SHOP_ITEMS`, `SKILLS` |
-| `minigames.ts` | `Minigames` | class registry: `BaseMinigame`/`ChoiceQuizMinigame`, every game class, `register(name, Ctor, meta)` |
+| `minigames.ts` + `minigames/` | `Minigames` | registry (`register(name, Ctor, meta)`) in `minigames.ts`; one module per game in `src/minigames/<id>.ts`; shared bases + drawing helpers in `src/minigames/shared.ts` |
 | `ui.ts` | `UI` | dialogue boxes, HUD, toasts, title, sticker book, journal, M-key map, day/night tint |
 | `main.ts` | `Game` | the game loop, world sim, save/load, interactions, play animations, input |
 

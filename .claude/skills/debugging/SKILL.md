@@ -91,7 +91,7 @@ main.ts if you need to watch it, and remove it before committing.
 5. **Smoke hang** — the game can't finish under its `meta.keys` (see
    the triage table). Fix by accepting a registered key at every prompt
    or adding a timeout that advances (the park-helper pattern in
-   Roller Lab, grep `helperUsed` in minigames.ts). Also confirm every
+   Roller Lab, grep `helperUsed` in src/minigames/rollerlab.ts). Also confirm every
    phase has an exit — Roller Lab once trapped players in its
    editor↔test loop with no way out.
 

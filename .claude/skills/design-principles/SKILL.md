@@ -6,15 +6,14 @@ description: Use when designing, proposing, or evaluating anything new for Starr
 # Design principles — the quality bar
 
 The player is a toddler (or someone playing like one). Every rule below
-follows from that. The codebase motto, from the header of
-`src/minigames.ts`: *"Everyone gets at least one star — this is a kind
-game."*
+follows from that. The project motto: *everyone gets at least one star —
+this is a kind game.*
 
 ## Kindness invariants (non-negotiable)
 
 - **No fail states.** Nothing ends badly: minigames award 1–3 stars and
   `complete()` clamps to a 1-star minimum (`Math.max(1, Math.min(3,
-  stars))` in `BaseMinigame`). There is no game-over, no losing health,
+  stars))` in `BaseMinigame`, `src/minigames/shared.ts`). There is no game-over, no losing health,
   no scolding.
 - **Misses are gentle.** A wrong answer gets the soft `deny` chime (a
   quiet 180 Hz downward blip, `deny()` in `src/audio.ts`) and
@@ -24,7 +23,7 @@ game."*
   and advance; nothing waits forever hoping the player figures it out.
 - **Helpers genuinely help.** If assistance appears, it must do what it
   says. The pattern: Roller Lab's park helper (grep `park helper` in
-  `src/minigames.ts`) rolls the marble to the next maze after 70s —
+  `src/minigames/rollerlab.ts`) rolls the marble to the next maze after 70s —
   it does not end the game or fake a reward.
 - **Every state has an exit.** The player must always be able to leave —
   a menu Esc, a timeout, or a completion path. Audit each phase of a new
@@ -61,7 +60,7 @@ Study `talk:` arrays in `src/entities.ts` and `UI.say` lines in
 ## Visual language
 
 Pastels, chunky rounded shapes, soft shadows. Canonical UI colors
-(verified in `src/minigames.ts` / `src/ui.ts`):
+(verified in `src/minigames/shared.ts` / `src/ui.ts`):
 
 | Use | Hex |
 | --- | --- |
