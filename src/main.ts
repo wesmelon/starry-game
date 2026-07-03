@@ -270,16 +270,10 @@ export const Game = (() => {
   }
 
   // ---------- just-for-fun minigames ----------
-  const FUN_GAME_INFO: Record<string, { label: string; energy: number; minutes: number; minEnergy: number }> = {
-    shells:  { label: 'Shell Splash', energy: 12, minutes: 40, minEnergy: 15 },
-    veggies: { label: 'Veggie Round-up', energy: 12, minutes: 40, minEnergy: 15 },
-    math:    { label: 'Number Time', energy: 0, minutes: 20, minEnergy: 0 },
-    bubblepop:  { label: 'Bubble Pop', energy: 8, minutes: 25, minEnergy: 10 },
-    balloonbop: { label: 'Balloon Bop', energy: 8, minutes: 25, minEnergy: 10 },
-    hopscotch:  { label: 'Hopscotch Hero', energy: 8, minutes: 25, minEnergy: 10 },
-  };
+  // label / energy / minutes / minEnergy live in each game's registration
+  // (see MinigameMeta in minigames.ts) — one place to define a game.
   function funGameInfo(game: string) {
-    return FUN_GAME_INFO[game] || { label: game, energy: 12, minutes: 40, minEnergy: 15 };
+    return Minigames.meta(game) || { label: game, energy: 12, minutes: 40, minEnergy: 15 };
   }
   function startFunGame(npc: { name: string; game?: string }, game?: string) {
     game = game || npc.game || '';

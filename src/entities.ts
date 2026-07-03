@@ -117,6 +117,8 @@ export const Entities = (() => {
     // ---- weekend art class in town ----
     {
       id: 'doodle', name: 'Mr. Doodle', sprite: 'doodle', radius: 1, teaches: 'art',
+      freeGames: [{ game: 'stampstudio', label: 'Play Stamp Studio' }],
+      freeGamePrompt: 'The stamp pads are ready! Want to make a tiny pattern?',
       where: () => ({ map: 'art', x: 5, y: 5 }),
       talk: () => ['Welcome to the Rainbow Art Room! Smocks on, sleeves up!',
                    'There are no scribbles here. Only very fast rainbows.',

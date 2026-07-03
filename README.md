@@ -70,10 +70,11 @@ Starry falls asleep and a new day begins. Days follow a weekly schedule:
   Waltz Steps: watch Madame Plié's routine, then repeat it with the arrows.
 - **Art** (Rainbow Art Room, by the town square) — Saturday & Sunday,
   9:00–11:30am. Painting Time: answer Mr. Doodle's color questions
-  (what do red and yellow make?).
+  (what do red and yellow make?). Mr. Doodle also offers **Stamp Studio**
+  whenever you visit the art room.
 - **Any day** — Sandy on the beach hosts **Shell Splash** (catch falling
-  shells in a bucket) and Farmer Fern hosts **Veggie Round-up** (pick the
-  carrots before they wiggle away). Each pays stars once a day.
+  shells in a bucket) and Farmer Fern hosts **Veggie Round-up** (pick each
+  carrot with the matching arrow). Each pays stars once a day.
 
 Classes earn **stars** (the currency) and **skill XP**. Spend stars at
 Mr. Scoop's Sweets for energy treats, Ducky Snacks, and Critter Treats. Talk
@@ -191,6 +192,12 @@ npm run check       # build, then run both validators below
 Two headless validators run against the built bundle (no browser needed):
 
 - `node dev/check.js` — data checks: map geometry, warps, NPC schedules,
-  song note data, sprite templates, sticker definitions.
+  song note data, sprite templates, sticker definitions, minigame
+  registrations.
 - `node dev/smoke.js` — boots the whole game with a stubbed canvas, plays
-  every minigame to completion, and mashes keys in the live game loop.
+  every registered minigame to completion, and mashes keys in the live
+  game loop.
+
+Adding a minigame? Read `MINIGAMES.md` — games are self-contained classes
+registered with their metadata in one place, and the validators pick new
+ones up automatically.

@@ -31,7 +31,7 @@ try { vm.runInContext(fs.readFileSync(bundlePath, 'utf8'), sandbox, { filename: 
 catch (e) { console.log('  FAIL  bundle threw at load: ' + e.message); process.exit(1); }
 
 // the bundle exposes its modules on window.Starry for dev tooling
-const { Maps, Entities, SpriteLib, AudioSys } = windowStub.Starry;
+const { Maps, Entities, SpriteLib, AudioSys, Minigames } = windowStub.Starry;
 
 // ---- maps ----
 console.log('maps:');
@@ -164,6 +164,34 @@ for (const [name, song] of Object.entries(SONGS)) {
   for (const t of totals) {
     check(Math.abs(max / t - Math.round(max / t)) < 1e-6,
       `${name}: track length ${t} divides longest ${max} (stays in sync)`);
+  }
+}
+
+// ---- minigames ----
+// every registered game has usable metadata, and everything in the world
+// that launches a game points at a registered name
+console.log('minigames:');
+const gameNames = new Set(Minigames.types());
+for (const name of gameNames) {
+  const meta = Minigames.meta(name);
+  check(!!meta && typeof meta.label === 'string' && meta.label.length > 0, `minigame ${name} has a label`);
+  check(!!meta && Array.isArray(meta.keys) && meta.keys.length > 0, `minigame ${name} declares smoke-test keys`);
+  check(!!meta && typeof meta.description === 'string' && meta.description.length > 0, `minigame ${name} has a description`);
+}
+for (const n of Entities.NPCS) {
+  if (n.game) check(gameNames.has(n.game), `${n.id}.game "${n.game}" is a registered minigame`);
+  for (const fg of n.freeGames || [])
+    check(gameNames.has(fg.game), `${n.id} freeGames "${fg.game}" is a registered minigame`);
+}
+{
+  const mainTs = fs.readFileSync(path.join(root, 'src/main.ts'), 'utf8');
+  for (const m of mainTs.matchAll(/startFunGame\([^,)]+,\s*'(\w+)'\)/g))
+    check(gameNames.has(m[1]), `startFunGame('${m[1]}') in main.ts is a registered minigame`);
+  for (const n of Entities.NPCS) {
+    if (!n.teaches) continue;
+    check(new RegExp('^    ' + n.teaches + ':\\s*\\{ label:', 'm').test(mainTs),
+      `${n.id}.teaches "${n.teaches}" has a CLASS_INFO entry in main.ts`);
+    check(gameNames.has(n.teaches), `${n.id}.teaches "${n.teaches}" is a registered minigame`);
   }
 }
 

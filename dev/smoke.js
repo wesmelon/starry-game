@@ -103,14 +103,10 @@ try {
 
 // ---- every minigame, played to the end with mashy toddler input ----
 console.log('minigames:');
-const MG_KEYS = {
-  school: ['left', 'right', 'action'], math: ['left', 'right', 'action'], art: ['left', 'right', 'action'],
-  swim: ['left', 'right'], ballet: ['up', 'down', 'left', 'right'],
-  shells: ['left', 'right'], veggies: ['up', 'down', 'left', 'right'],
-  bubblepop: ['left', 'right', 'action'], balloonbop: ['up', 'down', 'left', 'right'],
-  hopscotch: ['up', 'down', 'left', 'right'],
-};
-for (const name of Object.keys(MG_KEYS)) {
+// every registered minigame is played to completion, mashing the input
+// keys its registration declares (MinigameMeta.keys) — new games are
+// covered automatically the moment they call Minigames.register(...)
+for (const name of Minigames.types()) {
   let finished = false, err = null;
   try {
     const mg = Minigames[name]((stars, perfect) => {
@@ -120,7 +116,7 @@ for (const name of Object.keys(MG_KEYS)) {
         `${name} perfect flag ok`);
     });
     mg.key('action');                       // leave the intro
-    const keys = MG_KEYS[name];
+    const keys = (Minigames.meta(name) || {}).keys || ['up', 'down', 'left', 'right', 'action'];
     for (let i = 0; i < 12000 && !finished; i++) {
       mg.update(0.05);
       mg.draw(g);
