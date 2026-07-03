@@ -346,12 +346,25 @@ export const Minigames = (() => {
       g.fillStyle = '#3f5fb8'; g.beginPath(); g.arc(cx + r * .26, cy - r * .24, r * .22, 0, 7); g.fill();
       g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.arc(cx - r * .25, cy - r * .28, r * .18, 0, 7); g.fill();
     } else if (kind === 'banana') {
-      g.lineCap = 'round';
-      g.strokeStyle = '#f5cf4f'; g.lineWidth = r * .58;
-      g.beginPath(); g.arc(cx, cy - r * .18, r * 1.05, 0.25, Math.PI - 0.15); g.stroke();
-      g.strokeStyle = '#b87830'; g.lineWidth = 3;
-      g.beginPath(); g.arc(cx, cy - r * .18, r * 1.05, 0.25, 0.32); g.stroke();
-      g.beginPath(); g.arc(cx, cy - r * .18, r * 1.05, Math.PI - 0.22, Math.PI - 0.15); g.stroke();
+      g.fillStyle = '#f5cf4f';
+      g.beginPath();
+      g.moveTo(cx - r * 1.05, cy - r * .25);
+      g.bezierCurveTo(cx - r * .55, cy + r * .9, cx + r * .8, cy + r * .75, cx + r * 1.18, cy - r * .28);
+      g.bezierCurveTo(cx + r * .72, cy + r * .18, cx - r * .42, cy + r * .2, cx - r * .82, cy - r * .55);
+      g.closePath(); g.fill();
+      g.strokeStyle = '#b87830'; g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(cx - r * 1.05, cy - r * .25);
+      g.bezierCurveTo(cx - r * .55, cy + r * .9, cx + r * .8, cy + r * .75, cx + r * 1.18, cy - r * .28);
+      g.stroke();
+      g.strokeStyle = '#fff0a0'; g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(cx - r * .58, cy - r * .13);
+      g.bezierCurveTo(cx - r * .2, cy + r * .42, cx + r * .45, cy + r * .42, cx + r * .82, cy - r * .05);
+      g.stroke();
+      g.fillStyle = '#8a5a30';
+      g.beginPath(); g.ellipse(cx - r * .98, cy - r * .34, r * .17, r * .09, -0.6, 0, 7); g.fill();
+      g.beginPath(); g.ellipse(cx + r * 1.2, cy - r * .3, r * .15, r * .09, -0.35, 0, 7); g.fill();
     } else if (kind === 'strawberry') {
       g.fillStyle = '#e85a5a';
       g.beginPath();
