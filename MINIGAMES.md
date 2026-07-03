@@ -2,11 +2,13 @@
 
 How to add a minigame to Starry ☆ Little Days. Written so that a developer
 (human or AI agent) can build, wire up, and verify a new game **without
-reading the rest of the codebase first**. Everything a game needs lives in
-two places:
+reading the rest of the codebase first**. A minigame is split across a small
+set of focused files:
 
-1. `src/minigames.ts` — the game class **and** its registration + metadata.
-2. One launcher in the world — an NPC or a tile (see "Launching from the
+1. `src/minigames/<id>.ts` — the game class and any private constants/helpers.
+2. `src/minigames/shared.ts` — shared bases, drawing helpers, common types.
+3. `src/minigames.ts` — the registry import plus `api.register(...)` metadata.
+4. One launcher in the world — an NPC or a tile (see "Launching from the
    world" below).
 
 The headless smoke test picks up new games automatically from the registry,
@@ -14,9 +16,9 @@ so there is nothing to update in `dev/`.
 
 ## The 60-second recipe
 
-1. Write a class in `src/minigames.ts` extending `BaseMinigame` (or
-   `ChoiceQuizMinigame` for three-card quizzes).
-2. Register it at the bottom of the file with its metadata:
+1. Create `src/minigames/fireflies.ts` and export a class extending
+   `BaseMinigame` (or `ChoiceQuizMinigame` for three-card quizzes).
+2. Import the class in `src/minigames.ts` and register it with metadata:
 
    ```ts
    api.register('fireflies', FirefliesMinigame, {
@@ -133,7 +135,7 @@ class MyQuiz extends ChoiceQuizMinigame {
 
 ## Drawing toolkit
 
-Helpers already in `src/minigames.ts` — prefer these over new utilities:
+Helpers live in `src/minigames/shared.ts` — prefer these over new utilities:
 
 | Helper | What it does |
 | --- | --- |
@@ -222,9 +224,10 @@ reference.
 | `balloonbop` | Balloon Bop | city balloon-cart tile |
 | `hopscotch` | Hopscotch Hero | city hopscotch tile, alphabet prompts |
 
-The single source of truth is the block of `api.register(...)` calls at
-the bottom of `src/minigames.ts` — each game's label, economics, `keys`,
-and description live there.
+The single source of truth for the playable list is the block of
+`api.register(...)` calls in `src/minigames.ts` — each game's label,
+economics, `keys`, and description live there. Keep each game's implementation
+in its matching `src/minigames/<id>.ts` file.
 
 ## Verifying
 
