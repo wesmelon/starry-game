@@ -179,7 +179,7 @@ const UI = (() => {
       const aft = (dow === 0 || dow === 2 || dow === 4) ? 'Ballet 2pm' : 'Swim 2pm';
       return 'School 9am · ' + aft;
     }
-    return 'Free play day!';
+    return 'Art 9am · then free play!';
   }
 
   function drawHUD(g, G) {
@@ -333,11 +333,11 @@ const UI = (() => {
   function drawJournal(g, G) {
     const W = g.canvas.width, H = g.canvas.height;
     g.fillStyle = 'rgba(40,25,50,.6)'; g.fillRect(0, 0, W, H);
-    panel(g, W / 2 - 330, 60, 660, 590, '#fff6e8', '#e0b8d0');
-    text(g, "☆ Starry's Journal ☆", W / 2, 105, 30, '#b85c8a', 'center');
-    text(g, 'Day ' + G.day + ' · ' + DAY_NAMES[G.dow] + ' · ★ ' + G.stars + ' stars saved up', W / 2, 145, 17, '#9a8ab8', 'center');
+    panel(g, W / 2 - 330, 40, 660, 640, '#fff6e8', '#e0b8d0');
+    text(g, "☆ Starry's Journal ☆", W / 2, 85, 30, '#b85c8a', 'center');
+    text(g, 'Day ' + G.day + ' · ' + DAY_NAMES[G.dow] + ' · ★ ' + G.stars + ' stars saved up', W / 2, 122, 17, '#9a8ab8', 'center');
     // skills
-    let y = 200;
+    let y = 172;
     for (const key of Object.keys(Entities.SKILLS)) {
       const sk = Entities.SKILLS[key];
       const xp = G.skills[key] || 0;
@@ -346,15 +346,15 @@ const UI = (() => {
       const next = Entities.LEVEL_XP[lvl] !== undefined ? Entities.LEVEL_XP[lvl] : cur;
       const frac = lvl >= 5 ? 1 : (xp - cur) / (next - cur || 1);
       text(g, sk.label, W / 2 - 280, y, 21, '#7a4a6a');
-      text(g, 'Lv ' + lvl + ' · ' + sk.titles[lvl - 1], W / 2 - 280, y + 28, 15, '#9a7ad0', 'left', 400);
+      text(g, 'Lv ' + lvl + ' · ' + sk.titles[lvl - 1], W / 2 - 280, y + 26, 15, '#9a7ad0', 'left', 400);
       g.fillStyle = 'rgba(150,130,150,.25)'; rr(g, W / 2 - 40, y - 8, 300, 18, 9); g.fill();
       g.fillStyle = '#9adbc8'; if (frac > 0) { rr(g, W / 2 - 40, y - 8, Math.max(12, 300 * frac), 18, 9); g.fill(); }
       text(g, lvl >= 5 ? 'MAX!' : (xp - cur) + ' / ' + (next - cur), W / 2 + 270, y + 1, 14, '#7a6a8a', 'right', 400);
-      y += 70;
+      y += 62;
     }
     // friends
     text(g, 'Friends', W / 2 - 280, y + 6, 21, '#7a4a6a');
-    y += 40;
+    y += 42;
     const friends = Entities.NPCS.filter(n => n.friend);
     friends.forEach((f) => {
       const pts = G.hearts[f.id] || 0;
@@ -364,7 +364,7 @@ const UI = (() => {
       text(g, f.name, W / 2 - 240, y, 18, '#5a4a6a');
       for (let i = 0; i < 5; i++)
         heart(g, W / 2 - 100 + i * 34, y, 11, i < full ? '#ff6f9e' : 'rgba(150,130,150,.3)');
-      y += 48;
+      y += 46;
     });
     text(g, 'J to close', W / 2, H - 38, 15, '#b8a8c8', 'center', 400);
   }
@@ -374,11 +374,12 @@ const UI = (() => {
   const MAP_COLORS = {
     '.': '#a9de7c', ',': '#9fd673', "'": '#a4da76',     // grass tufts
     ';': '#dad4c6', ':': '#c3bcac',                      // city pavement / avenue
+    '!': '#c3bcac', '+': '#c3bcac',                      // upright road / crossing
     'p': '#e7d2a4', 's': '#f1e4b4',                      // dirt path / sand
     'w': '#7cc3ea', 'W': '#7cc3ea', 'E': '#cfeaf5',      // water / pool deck
-    'f': '#cba074', '#': '#56a55f',                      // fences / trees & hedges
+    'f': '#cba074', '%': '#cba074', '#': '#56a55f',      // fences / trees & hedges
     '1': '#ff9ec5', '2': '#8fd0e8', '3': '#ffd479',      // building roofs
-    '4': '#bfa3e6', '5': '#ff9a8f',
+    '4': '#bfa3e6', '5': '#ff9a8f', '<': '#b89aec',
     '=': '#d2ad86', 'o': '#bfe6f2',                      // walls / windows
     // interiors
     '_': '#ecdcc6', '~': '#dbe8f1', '^': '#f1e1ed', '-': '#f4e4d2', '|': '#9a7a6a',
@@ -386,17 +387,23 @@ const UI = (() => {
     'r': '#ffb7d2', 'c': '#caa07a', 'T': '#caa07a', 'A': '#caa07a',
     't': '#caa07a', 'D': '#caa07a', 'M': '#bfe6f2', 'Q': '#9a7a6a',
     'h': '#ffd479', 'G': '#ffd479', 'y': '#ff9a8f', 'x': '#ffcf4d',
+    '}': '#c9935c',
     // little outdoor things to do
     'F': '#8fd0e8', '@': '#ff8fc0', 'I': '#ff6f9e', 'V': '#a8d8e8',
     'U': '#ffd479', 'd': '#ff9a8f', 'g': '#bfa3e6', 'J': '#8fd0e8',
     '*': '#ff9ec5', 'Y': '#e0584f', '&': '#f1e4b4',
+    // beach & farm
+    'Z': '#ffd9e8', '[': '#ff9a8f', ']': '#8fd0e8', ')': '#56a55f',
+    '8': '#e8c96a', '9': '#c89058', '$': '#e8955a', '?': '#caa07a',
+    '"': '#ffd479', '{': '#fdfdf8', '(': '#caa07a',
   };
-  // doors, the bus stop and interior exits get a little name tag
+  // doors, the bus stops and interior exits get a little name tag
   const PLACE_NAMES = {
     H: 'Home', S: 'School', P: 'Pool', C: 'Sweets', L: 'Ballet',
-    R: 'Library', O: 'Toys', K: 'Bakery', B: 'Bus stop', x: 'Door',
+    R: 'Library', O: 'Toys', K: 'Bakery', X: 'Barn', '0': 'Art',
+    B: 'Bus stop', '6': 'Beach bus', '7': 'Farm bus', x: 'Door',
   };
-  const PLACE_CHARS = 'HSPCLROKBx';
+  const PLACE_CHARS = 'HSPCLROKX0B67x';
 
   function tagPill(g, label, cx, cy, col, bg) {
     g.font = FONT(13);

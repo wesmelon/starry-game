@@ -1,15 +1,18 @@
 /* ======================================================================
    Starry ☆ Little Days — maps.js
    Tile maps as character grids. Each char maps to a painter in
-   sprites.js. Building doors (H S P L C R O K) warp into interiors;
-   mats (x) warp out. Bus stops (B) link the two outdoor maps.
+   sprites.js. Building doors (H S P L C R O K X 0) warp into interiors;
+   mats (x) warp out. Bus stops (B 6 7) link the outdoor maps: the town
+   is the hub, with lines to the city, the beach, and the farm.
    ====================================================================== */
 
 const Maps = (() => {
 
   const DATA = {
-    town: { label: 'Starview Meadow', base: '.', outdoor: true, music: 'meadow', rows: null },
-    city: { label: 'Starbright City', base: ';', outdoor: true, music: 'city', rows: null },
+    town:  { label: 'Starview Meadow', base: '.', outdoor: true, music: 'meadow', rows: null },
+    city:  { label: 'Starbright City', base: ';', outdoor: true, music: 'city', rows: null },
+    beach: { label: 'Shelly Shores', base: 's', outdoor: true, music: 'pool', rows: null },
+    farm:  { label: 'Sunny Hooves Farm', base: '.', outdoor: true, music: 'meadow', rows: null },
   };
 
   // ---- grid helpers (shared by town & city) ----
@@ -45,8 +48,8 @@ const Maps = (() => {
   {
     const tg = grid(TW, TH, '.');
     border(tg, TW, TH, '#');
-    // north: home and school
-    building(tg, 4, 3, 7, 2, '1', 'H');     // door at (7,6)
+    // north: home (with its purple roof) and school
+    building(tg, 4, 3, 7, 2, '<', 'H');     // door at (7,6)
     building(tg, 38, 2, 9, 3, '3', 'S');    // door at (42,6)
     // mid: pool, sweet shop, ballet studio
     building(tg, 4, 11, 9, 2, '2', 'P');    // door at (8,14)
@@ -75,6 +78,8 @@ const Maps = (() => {
     rect(tg, 24, 21, 24, 32, 'p');       // path down from the mid street
     rect(tg, 22, 33, 34, 39, 'p');       // the square
     tg[36][28] = 'F';                    // the fountain
+    // the Rainbow Art Room, just east of the square (weekend art class!)
+    building(tg, 36, 31, 8, 2, '4', '0'); // door at (40,34)
     // a little flower garden and two apple trees in the new green space
     tg[31][44] = '*'; tg[31][45] = '*'; tg[32][45] = '*'; tg[32][44] = '*';
     tg[10][14] = 'Y'; tg[18][50] = 'Y';
@@ -90,8 +95,13 @@ const Maps = (() => {
     tg[15][21] = 'q';  // sweet shop sign
     tg[15][38] = 'n';  // ballet sign
     tg[19][38] = 'e';  // park sign
+    tg[35][38] = '(';  // art room sign
     tg[8][60] = 'B';   // bus stop to the city (on the east end of main street)
     tg[7][60] = 'i';   // bus-stop sign
+    tg[8][3] = '7';    // bus stop to the farm (west end of main street)
+    tg[7][3] = 'i';
+    tg[36][34] = '6';  // bus stop to the beach (east side of the town square)
+    tg[35][34] = 'i';
     DATA.town.rows = tg.map(r => r.join(''));
   }
 
@@ -104,16 +114,19 @@ const Maps = (() => {
     border(cg, CW, CH, '#');
     // a leafy green strip down the middle-south and pocket parks
     rect(cg, 2, 19, CW - 3, 37, '.');
-    // the grand avenue (two tiles tall) and a cross street
+    // the grand avenue (two tiles tall) and a cross street — the cross
+    // street runs up-and-down, so its dashes do too ('!'), and the spot
+    // where the two roads meet is plain asphalt ('+')
     rect(cg, 2, 17, CW - 3, 18, ':');
-    rect(cg, 28, 2, 29, 37, ':');
+    rect(cg, 28, 2, 29, 37, '!');
+    rect(cg, 28, 17, 29, 18, '+');
     // sidewalks hugging the avenue
     rect(cg, 2, 16, CW - 3, 16, ';'); rect(cg, 2, 19, CW - 3, 19, ';');
     rect(cg, 27, 2, 27, 37, ';'); rect(cg, 30, 2, 30, 37, ';');
     // shops along the north side
-    building(cg, 6, 4, 9, 3, '4', 'R', ';');    // Library     door (10,7)
-    building(cg, 20, 4, 8, 2, '5', 'O', ';');   // Toy Store   door (23,6)
-    building(cg, 40, 4, 8, 2, '1', 'K', ';');   // Bakery Café door (43,6)
+    building(cg, 6, 4, 9, 3, '4', 'R', ';');    // Library     door (10,8)
+    building(cg, 20, 4, 8, 2, '5', 'O', ';');   // Toy Store   door (24,7)
+    building(cg, 40, 4, 8, 2, '1', 'K', ';');   // Bakery Café door (44,7)
     // a plaza fountain on the west green
     rect(cg, 8, 22, 22, 32, ';');
     cg[27][15] = 'F';                    // the city fountain
@@ -123,9 +136,11 @@ const Maps = (() => {
     cg[30][50] = 'g';                    // a city swing
     cg[24][40] = 'V';                    // a bubble stand
     cg[25][20] = 'U';                    // sidewalk hopscotch on the plaza
-    // the petting zoo — a fenced grassy pen (gate gap on the top)
+    // the petting zoo — a fenced grassy pen (gate gap on the top);
+    // the side rails run up-and-down, so they use the upright fence tile
     rect(cg, 5, 24, 14, 34, 'f');
     rect(cg, 6, 25, 13, 33, '.');
+    for (let y = 25; y <= 33; y++) { cg[y][5] = '%'; cg[y][14] = '%'; }
     cg[24][9] = '.'; cg[24][10] = '.';   // gate
     // pocket greenery: trees + flower beds
     rect(cg, 50, 22, 52, 26, '#'); rect(cg, 34, 30, 36, 33, '#');
@@ -140,6 +155,59 @@ const Maps = (() => {
     cg[8][22] = 'j';                     // toy store sign (teddy)
     cg[8][42] = 'N';                     // bakery sign (cupcake)
     DATA.city.rows = cg.map(r => r.join(''));
+  }
+
+  // ====================================================================
+  //  BEACH — Shelly Shores (a sunny little cove at the end of the bus line)
+  // ====================================================================
+  const BW = 40, BH = 30;
+  {
+    const bg = grid(BW, BH, 's');
+    border(bg, BW, BH, '#');
+    // the sea! (swimmable, once Starry has had a swim class)
+    rect(bg, 0, 21, BW - 1, BH - 1, 'w');
+    for (let x = 2; x <= BW - 3; x += 4) { bg[20][x] = 'w'; bg[20][x + 1] = 'w'; }
+    bg[3][20] = 'B'; bg[3][18] = 'i';           // bus stop home + sign
+    // palm trees for shade
+    bg[6][5] = ')'; bg[8][31] = ')'; bg[15][34] = ')'; bg[16][4] = ')';
+    // umbrellas, shells, a big beach ball, and a sandcastle spot
+    bg[10][12] = '['; bg[13][27] = '[';
+    bg[13][7] = 'Z'; bg[17][16] = 'Z'; bg[16][30] = 'Z'; bg[8][23] = 'Z';
+    bg[14][14] = ']';
+    bg[18][24] = '&';
+    DATA.beach.rows = bg.map(r => r.join(''));
+  }
+
+  // ====================================================================
+  //  FARM — Sunny Hooves Farm (barn, pony, veggie patch, and hay to spare)
+  // ====================================================================
+  const FW = 44, FH = 32;
+  {
+    const fg = grid(FW, FH, '.');
+    border(fg, FW, FH, '#');
+    // the big red barn — walk inside to meet Daisy the cow
+    building(fg, 6, 4, 10, 3, '3', 'X');        // door at (11,8)
+    // the farm lane, out to the bus stop on the east side
+    rect(fg, 4, 10, 40, 10, 'p');
+    fg[10][40] = 'B'; fg[9][40] = 'i';          // bus stop home + sign
+    // the pony paddock (upright rails on the sides, gate gap on top)
+    rect(fg, 6, 14, 16, 20, 'f');
+    rect(fg, 7, 15, 15, 19, '.');
+    for (let y = 15; y <= 19; y++) { fg[y][6] = '%'; fg[y][16] = '%'; }
+    fg[14][10] = '.'; fg[14][11] = '.';         // gate
+    fg[17][11] = '9';                           // Buttercup the pony
+    // veggie patch with a friendly scarecrow
+    rect(fg, 21, 14, 26, 16, '$');
+    fg[15][19] = '?';
+    // sunflowers, hay bales, apple trees, flowers, and a little woods
+    rect(fg, 30, 5, 37, 5, '"');
+    fg[7][17] = '8'; fg[8][17] = '8'; fg[8][18] = '8';
+    fg[13][32] = '8'; fg[13][33] = '8';
+    fg[22][36] = 'Y'; fg[24][6] = 'Y';
+    fg[25][37] = '*'; fg[25][38] = '*'; fg[26][37] = '*'; fg[26][38] = '*';
+    rect(fg, 20, 24, 22, 26, '#'); rect(fg, 33, 20, 35, 22, '#');
+    sprinkle(fg, FW, FH);
+    DATA.farm.rows = fg.map(r => r.join(''));
   }
 
   // ====================================================================
@@ -272,9 +340,38 @@ const Maps = (() => {
     ],
   };
 
+  DATA.barn = {
+    label: 'The Big Red Barn', base: '_', music: 'shop',
+    rows: [
+      '||||||||||||||||',
+      '|88..........88|',
+      '|8.............|',
+      '|...{..........|',
+      '|..............|',
+      '|.........8....|',
+      '|..............|',
+      '|.......x......|',
+      '||||||||||||||||',
+    ],
+  };
+
+  DATA.art = {
+    label: 'Rainbow Art Room', base: '~', music: 'school',
+    rows: [
+      '||||||||||||||',
+      '|mm........mm|',
+      '|..}..}..}...|',
+      '|............|',
+      '|....t.......|',
+      '|............|',
+      '|......x.....|',
+      '||||||||||||||',
+    ],
+  };
+
   // water (w, W) is not solid — Starry can swim once she's had a class.
   // E is the walkable pool deck rim. Doors and bus stops stay walkable.
-  const SOLID = new Set('#f12345=o|bvmkyTcADtMQGhdgaunqzeFYJ@IlijNV'.split(''));
+  const SOLID = new Set('#f%12345<=o|bvmkyTcADtMQGhdgaunqzeFYJ@IlijNV[])89?"{}('.split(''));
   const WATER = new Set(['w', 'W']);
   const isWater = (name, x, y) => WATER.has(tileAt(name, x, y));
 
@@ -282,15 +379,18 @@ const Maps = (() => {
   const DOORS = {
     H: { outer: 'town', inner: 'home' },   S: { outer: 'town', inner: 'school' },
     P: { outer: 'town', inner: 'pool' },   L: { outer: 'town', inner: 'ballet' },
-    C: { outer: 'town', inner: 'shop' },
+    C: { outer: 'town', inner: 'shop' },   '0': { outer: 'town', inner: 'art' },
     R: { outer: 'city', inner: 'library' }, O: { outer: 'city', inner: 'toystore' },
     K: { outer: 'city', inner: 'cafe' },
+    X: { outer: 'farm', inner: 'barn' },
   };
   // outdoor<->outdoor links (bus stops): walk onto `ch` to ride between maps
   const OFF = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
   const LINKS = [
     { a: { map: 'town', ch: 'B' }, b: { map: 'city', ch: 'B' }, dir: 'right' },
+    { a: { map: 'town', ch: '6' }, b: { map: 'beach', ch: 'B' }, dir: 'right' },
+    { a: { map: 'town', ch: '7' }, b: { map: 'farm', ch: 'B' }, dir: 'left' },
   ];
 
   const warps = {};   // mapName -> { 'x,y': {map, x, y, dir} }

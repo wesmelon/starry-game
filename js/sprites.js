@@ -141,6 +141,7 @@ const SpriteLib = (() => {
     rosie:    { kind:'kid',   pal:{ H:'#e8843f', D:'#9adb7a', d:'#7fc25e', P:'#ffd166', B:'#5a8a3a' } },
     sandy:    { kind:'adult', pal:{ H:'#e8b85a', P:'#e8b85a', D:'#ff6f6f', A:'#fff5fa', B:'#c85a50' } },
     fern:     { kind:'adult', pal:{ H:'#8a5a30', P:'#8a5a30', D:'#7a9fd0', A:'#e8d5a0', B:'#6a4a2a' } },
+    doodle:   { kind:'adult', pal:{ H:'#d8763f', P:'#d8763f', D:'#8fd0e8', A:'#ffe6a0', B:'#b85c8a' } },
   };
 
   const DUCK = [

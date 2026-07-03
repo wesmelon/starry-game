@@ -27,6 +27,8 @@ const Entities = (() => {
     },
     {
       id: 'msbloom', name: 'Ms. Bloom', sprite: 'msbloom', radius: 1, teaches: 'school',
+      freeGames: [{ game: 'math', label: 'Play Number Time' }],
+      freeGamePrompt: 'Want to play a little number game?',
       where: () => ({ map: 'school', x: 5, y: 3 }),
       talk: () => ['Welcome to Sunny Sprouts! We sing, we count, we wiggle.',
                    'Did you know? Octopuses have THREE hearts. Wow!',
@@ -80,6 +82,8 @@ const Entities = (() => {
     // ---- Starbright City folks ----
     {
       id: 'paige', name: 'Miss Paige', sprite: 'paige', radius: 0.8, story: true,
+      shop: true, shopName: 'Miss Paige', stock: ['storybook'],
+      greeting: 'Welcome to storytime! Shall we read together, or would you like a book of your very own?',
       where: () => ({ map: 'library', x: 5, y: 2 }),
       talk: () => ['Welcome to the library! Shhh... the books are napping.',
                    'A baby owl is called an owlet. Hoo-hoo!',
@@ -87,6 +91,8 @@ const Entities = (() => {
     },
     {
       id: 'bram', name: 'Mr. Bram', sprite: 'bram', radius: 0.8,
+      shop: true, shopName: 'Mr. Bram', stock: ['teddy', 'froggy', 'bball'],
+      greeting: 'Welcome to Tippy Top Toys! Everything here squeaks, stacks, or bounces.',
       where: () => ({ map: 'toystore', x: 5, y: 2 }),
       talk: () => ['Welcome to Tippy Top Toys! Wind-up froggies on sale.',
                    'Press the blocks — they go CLICK. So satisfying.',
@@ -105,6 +111,32 @@ const Entities = (() => {
       talk: () => ['I live by the carousel! I can hear it go ding-ding all day.',
                    'Wanna share a balloon? You hold the string — I hold the air!',
                    'My grampa is the baker. I get FIRST muffin. Every single time.'],
+    },
+    // ---- weekend art class in town ----
+    {
+      id: 'doodle', name: 'Mr. Doodle', sprite: 'doodle', radius: 1, teaches: 'art',
+      where: () => ({ map: 'art', x: 5, y: 5 }),
+      talk: () => ['Welcome to the Rainbow Art Room! Smocks on, sleeves up!',
+                   'There are no scribbles here. Only very fast rainbows.',
+                   'Blue and yellow had a hug — and out came green!'],
+    },
+    // ---- Shelly Shores ----
+    {
+      id: 'sandy', name: 'Sandy', sprite: 'sandy', radius: 1.4, game: 'shells',
+      gamePrompt: 'The tide washed in a WHOLE bunch of shells! Want to play Shell Splash?',
+      where: () => ({ map: 'beach', x: 18, y: 8 }),
+      talk: () => ['Welcome to Shelly Shores! The waves say whoosh, whoosh.',
+                   'Look for pink shells — those are the luckiest ones!',
+                   'Splash all you like, little star. Sandy is watching the water!'],
+    },
+    // ---- Sunny Hooves Farm ----
+    {
+      id: 'fern', name: 'Farmer Fern', sprite: 'fern', radius: 1.4, game: 'veggies',
+      gamePrompt: 'The carrots are popping up all silly today! Help me with the Veggie Round-up?',
+      where: () => ({ map: 'farm', x: 13, y: 11 }),
+      talk: () => ['Morning, little sprout! Buttercup the pony loves visitors.',
+                   'The carrots grew extra crunchy this year. Take one!',
+                   'Daisy the cow is in the big red barn. She says moo. A LOT.'],
     },
   ];
 
@@ -146,6 +178,26 @@ const Entities = (() => {
       fed: 'Pepper spins in a happy circle, then a second one!',
       happy: 'Pepper naps in the hay with all four paws twitching.',
       hungry: 'Pepper the zoo puppy bonks the fence with her nose...' },
+    { id: 'crab', name: 'Snippy', kind: 'crab', map: 'beach', x: 10.5, y: 17.5, sfx: 'squeak',
+      fed: 'Snippy does a sideways happy dance. Click click!',
+      happy: 'Snippy is busy decorating his burrow with a shell.',
+      hungry: 'Snippy the crab waves his little claws at the treat bag...' },
+    { id: 'hen1', name: 'Peep', kind: 'chick', map: 'farm', x: 32.5, y: 14.5, sfx: 'squeak',
+      fed: 'Peep pecks up every crumb, then cheeps a thank-you!',
+      happy: 'Peep is snoozing in a warm, fluffy puddle of feathers.',
+      hungry: 'Peep the chick hops in place. Cheep! Cheep! Snack?' },
+    { id: 'hen2', name: 'Nugget', kind: 'chick', map: 'farm', x: 34.5, y: 16.5, sfx: 'squeak',
+      fed: 'Nugget zooms in a circle — the famous full-tummy zoomies!',
+      happy: 'Nugget found a sunbeam and is not leaving it.',
+      hungry: 'Nugget the chick tilts her head at your pockets...' },
+    { id: 'piglet', name: 'Wiggles', kind: 'pig', map: 'farm', x: 26.5, y: 22.5, sfx: 'squeak',
+      fed: 'Wiggles munches happily and wiggles from nose to tail!',
+      happy: 'Wiggles is rolling in the grass. Life is very good.',
+      hungry: 'Wiggles the piglet sniffs the air hopefully. Oink?' },
+    { id: 'barncat', name: 'Hazel', kind: 'cat', map: 'barn', x: 12.5, y: 6.0, sfx: 'meow',
+      fed: 'Hazel purrs and curls up on the warmest hay bale.',
+      happy: 'Hazel is keeping one sleepy eye on the whole barn.',
+      hungry: 'Hazel the barn cat pads over, tail curled like a question mark...' },
   ];
 
   const STICKERS = [
@@ -185,6 +237,18 @@ const Entities = (() => {
     { id: 'hop',       icon: 'hop',    name: 'Hopscotch',        hint: 'Hop the sidewalk hopscotch in the city' },
     { id: 'bubbles',   icon: 'bubbles',name: 'Bubbles!',         hint: 'Blow bubbles at the bubble stand' },
     { id: 'citypal',   icon: 'heart',  name: 'City Pal',         hint: "Fill up Rosie's friendship hearts" },
+    { id: 'beachtrip', icon: 'wave',   name: 'Beach Day!',       hint: 'Ride the bus to Shelly Shores' },
+    { id: 'shell',     icon: 'shell',  name: 'Shell Seeker',     hint: 'Find a pretty seashell on the beach' },
+    { id: 'beachball', icon: 'ball',   name: 'Beach Ball Bop',   hint: 'Bounce the big beach ball' },
+    { id: 'farmtrip',  icon: 'barn',   name: 'Farm Day!',        hint: 'Ride the bus to Sunny Hooves Farm' },
+    { id: 'pony',      icon: 'pony',   name: 'Pony Pal',         hint: 'Ride Buttercup the pony' },
+    { id: 'carrot',    icon: 'carrot', name: 'Crunchy Carrot',   hint: 'Pull a carrot from the veggie patch' },
+    { id: 'moo',       icon: 'cow',    name: 'Big Moo!',         hint: 'Say hello to Daisy in the big red barn' },
+    { id: 'barnpals',  icon: 'paw',    name: 'Barn Buddies',     hint: 'Feed all the farm friends in one day' },
+    { id: 'mytoy',     icon: 'teddy',  name: 'My Very Own Toy',  hint: 'Buy a toy to take home' },
+    { id: 'painter',   icon: 'palette',name: 'Little Painter',   hint: 'Go to your first art class' },
+    { id: 'rainbow',   icon: 'rainbow',name: 'Rainbow Maker',    hint: 'Reach Painting level 3' },
+    { id: 'artist',    icon: 'medal',  name: 'Starry the Artist',hint: 'Reach Painting level 5' },
   ];
 
   const SHOP_ITEMS = [
@@ -196,12 +260,18 @@ const Entities = (() => {
     { id: 'muffin',   name: 'Blueberry Muffin',cost: 3, energy: 45, line: 'Muffin top first — that\'s the rule!' },
     { id: 'cocoa',    name: 'Cozy Cocoa',      cost: 2, energy: 30, line: 'Warm and chocolaty all the way down!' },
     { id: 'pretzel',  name: 'Twisty Pretzel',  cost: 4, energy: 55, line: 'Twisty and salty and SO good!' },
+    // toys go home with Starry and wait in her room (each one is bought once)
+    { id: 'teddy',    name: 'Huggy Teddy',     cost: 8, toy: true, line: 'So soft! Teddy needs a name... and a hug. Mostly a hug.' },
+    { id: 'froggy',   name: 'Wind-up Froggy',  cost: 6, toy: true, line: 'Boing! Boing! Froggy hops all by himself!' },
+    { id: 'bball',    name: 'Bouncy Ball',     cost: 5, toy: true, line: 'It bounces higher than Starry\'s head!' },
+    { id: 'storybook',name: 'Picture Book',    cost: 6, toy: true, line: 'A book about a brave little bunny. Again! Again!' },
   ];
 
   const SKILLS = {
     letters: { label: 'Letters', titles: ['Doodler', 'ABC Singer', 'Word Wizkid', 'Story Lover', 'Reading Star'] },
     swim:    { label: 'Swimming', titles: ['Tadpole', 'Splasher', 'Goldfish', 'Flying Fish', 'Little Dolphin'] },
     ballet:  { label: 'Ballet', titles: ['Wobbler', 'Twinkle Toes', 'Twirler', 'Grand Jeté', 'Prima Starrina'] },
+    art:     { label: 'Painting', titles: ['Scribbler', 'Crayon Kid', 'Rainbow Maker', 'Color Mixer', 'Little Artist'] },
   };
   const LEVEL_XP = [0, 2, 5, 9, 14]; // xp needed for levels 1..5
   function skillLevel(xp) {

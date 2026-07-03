@@ -374,6 +374,10 @@ const AudioSys = (() => {
                 tone(210, ctx.currentTime + 0.14, 0.10, 'square', 0.08, 130); },
     squeak()  { tone(1100, ctx.currentTime, 0.07, 'sine', 0.10, 1500);
                 tone(1300, ctx.currentTime + 0.1, 0.07, 'sine', 0.10, 1700); },
+    moo()     { tone(200, ctx.currentTime, 0.5, 'sawtooth', 0.07, 110);
+                tone(400, ctx.currentTime, 0.16, 'sine', 0.05, 220); },
+    neigh()   { tone(700, ctx.currentTime, 0.3, 'sawtooth', 0.05, 450);
+                tone(500, ctx.currentTime + 0.28, 0.18, 'sawtooth', 0.04, 380); },
     note(n)   { tone(freq(n), ctx.currentTime, 0.5, 'triangle', 0.18); },
     sparkle() { jingle([['B5',0,.25],['E6',.18,.25],['A6',.36,.55]]); },
     ride()    { jingle([['C5',0,.3],['E5',.25,.3],['G5',.5,.3],['E5',.75,.3],['C5',1,.55]]); },

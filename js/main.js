@@ -22,16 +22,18 @@ const Game = (() => {
   let summaryInfo = null, summaryT = 0;
   let prevTmin = 0;
   let stepT = 0;
+  let anim = null;              // {type, t, dur, tx, ty, ox, oy, after, fired}
+  const parts = [];             // sparkles & bubbles
 
   // ---------- persistent state ----------
   let G = null;
   function freshG() {
     return {
       day: 1, tmin: DAY_START, stars: 0, energy: 100,
-      skills: { letters: 0, swim: 0, ballet: 0 },
-      hearts: {}, stickers: [], duckFood: 0, treats: 0, fedDay: {},
-      done: { school: false, swim: false, ballet: false },
-      talked: {}, counts: { school: 0, swim: 0, ballet: 0 },
+      skills: { letters: 0, swim: 0, ballet: 0, art: 0 },
+      hearts: {}, stickers: [], duckFood: 0, treats: 0, toys: [], fedDay: {},
+      done: { school: false, swim: false, ballet: false, art: false },
+      talked: {}, counts: { school: 0, swim: 0, ballet: 0, art: 0 },
       fun: {},
       flags: {},
     };
@@ -76,8 +78,10 @@ const Game = (() => {
       const raw = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (!raw || !raw.G) return false;
       G = Object.assign(freshG(), raw.G);
-      G.skills = Object.assign({ letters: 0, swim: 0, ballet: 0 }, raw.G.skills);
-      G.done = Object.assign({ school: false, swim: false, ballet: false }, raw.G.done);
+      G.skills = Object.assign({ letters: 0, swim: 0, ballet: 0, art: 0 }, raw.G.skills);
+      G.done = Object.assign({ school: false, swim: false, ballet: false, art: false }, raw.G.done);
+      G.counts = Object.assign({ school: 0, swim: 0, ballet: 0, art: 0 }, raw.G.counts);
+      if (!Array.isArray(G.toys)) G.toys = [];
       return true;
     } catch (e) { return false; }
   }
@@ -125,6 +129,9 @@ const Game = (() => {
     ballet: { label: 'Ballet', skill: 'ballet', firstSticker: 'twirl',
               prompt: 'Shall we dance, petite étoile?',
               days: [0, 2, 4], from: 13, to: 16 },
+    art:    { label: 'Art', skill: 'art', firstSticker: 'painter',
+              prompt: 'The paints are ready! Shall we make something colorful?',
+              days: [5, 6], from: 9, to: 11.5 },
   };
   function classAvailable(type) {
     const c = CLASS_INFO[type];
@@ -132,8 +139,7 @@ const Game = (() => {
   }
   function startClass(type) {
     state = 'minigame';
-    mg = Minigames[type === 'school' ? 'school' : type === 'swim' ? 'swim' : 'ballet'](
-      (stars, perfect) => endClass(type, stars, perfect));
+    mg = Minigames[type]((stars, perfect) => endClass(type, stars, perfect));
   }
   function endClass(type, stars, perfect) {
     const c = CLASS_INFO[type];
@@ -145,7 +151,7 @@ const Game = (() => {
     const before = Entities.skillLevel(G.skills[c.skill]);
     G.skills[c.skill]++;
     const after = Entities.skillLevel(G.skills[c.skill]);
-    if (type === 'school') G.tmin = Math.max(G.tmin, 12 * 60);
+    if (type === 'school' || type === 'art') G.tmin = Math.max(G.tmin, 12 * 60);
     else G.tmin = Math.min(G.tmin + 75, DAY_END - 10);
     award(c.firstSticker);
     stats.lines.push(c.label + ' class: ' + '★'.repeat(stars) + (perfect ? ' (perfect!)' : ''));
@@ -154,7 +160,8 @@ const Game = (() => {
       const sk = Entities.SKILLS[c.skill];
       UI.toast(sk.label + ' is now Lv ' + after + ': ' + sk.titles[after - 1] + '!', 'medal');
       const milestones = {
-        letters: { 3: 'abc', 5: 'scholar' }, swim: { 3: 'goldfish', 5: 'dolphin' }, ballet: { 3: 'tutu', 5: 'prima' },
+        letters: { 3: 'abc', 5: 'scholar' }, swim: { 3: 'goldfish', 5: 'dolphin' },
+        ballet: { 3: 'tutu', 5: 'prima' }, art: { 3: 'rainbow', 5: 'artist' },
       }[c.skill];
       if (milestones && milestones[after]) award(milestones[after]);
     }
@@ -163,13 +170,25 @@ const Game = (() => {
   }
 
   // ---------- shop ----------
+  const TOY_ICONS = { teddy: 'teddy', froggy: 'froggy', bball: 'ball', storybook: 'book' };
+  function storyTime(npc) {
+    const lines = npc.talk(gview()) || [];
+    UI.say(npc.name, [lines[G.day % Math.max(1, lines.length)] || '...!']);
+    funReward('story', 1);
+    award('story');
+    AudioSys.sfx('note', 'C5');
+  }
   function openShop(npc) {
     const ids = npc.stock || Entities.SHOP_ITEMS.map(i => i.id);
-    const stock = ids.map(id => Entities.SHOP_ITEMS.find(i => i.id === id)).filter(Boolean);
+    const stock = ids.map(id => Entities.SHOP_ITEMS.find(i => i.id === id))
+      .filter(Boolean)
+      .filter(it => !(it.toy && G.toys.includes(it.id)));   // each toy comes home once
     const opts = stock.map(it => ({ label: it.name + '  (' + it.cost + '★)', value: it.id }));
+    if (npc.story) opts.push({ label: 'Read a story ♪', value: '__story' });
     opts.push({ label: 'Just looking!', value: null });
     const who = npc.shopName || npc.name;
     UI.choose(who, npc.greeting || 'What would you like?', opts, (val) => {
+      if (val === '__story') return storyTime(npc);
       if (!val) return;
       const it = Entities.SHOP_ITEMS.find(i => i.id === val);
       if (G.stars < it.cost) {
@@ -184,6 +203,13 @@ const Game = (() => {
       } else if (it.treats) {
         G.treats += 3;
         UI.say(who, ['Three crunchy critter treats! The furry little townsfolk will love you.'], null);
+      } else if (it.toy) {
+        G.toys.push(it.id);
+        award('mytoy');
+        stats.lines.push('Brought home a new toy: ' + it.name);
+        UI.toast(it.name + ' will be waiting in your room!', TOY_ICONS[it.id]);
+        AudioSys.sfx('pop');
+        UI.say('Starry', [it.line]);
       } else {
         G.energy = Math.min(100, G.energy + it.energy);
         AudioSys.sfx('munch');
@@ -192,6 +218,46 @@ const Game = (() => {
       }
       AudioSys.sfx('confirm');
     });
+  }
+
+  // ---------- just-for-fun minigames ----------
+  const FUN_GAME_INFO = {
+    shells:  { label: 'Shell Splash', energy: 12, minutes: 40, minEnergy: 15 },
+    veggies: { label: 'Veggie Round-up', energy: 12, minutes: 40, minEnergy: 15 },
+    math:    { label: 'Number Time', energy: 0, minutes: 20, minEnergy: 0 },
+    bubblepop:  { label: 'Bubble Pop', energy: 8, minutes: 25, minEnergy: 10 },
+    balloonbop: { label: 'Balloon Bop', energy: 8, minutes: 25, minEnergy: 10 },
+    hopscotch:  { label: 'Hopscotch Hero', energy: 8, minutes: 25, minEnergy: 10 },
+  };
+  function funGameInfo(game) {
+    return FUN_GAME_INFO[game] || { label: game, energy: 12, minutes: 40, minEnergy: 15 };
+  }
+  function startFunGame(npc, game) {
+    game = game || npc.game;
+    const info = funGameInfo(game);
+    if (G.energy < info.minEnergy) {
+      UI.say(npc.name, ['Ooh, those are sleepy eyes! Have a little snack or a nap first.']);
+      return;
+    }
+    state = 'minigame';
+    mg = Minigames[game]((stars, perfect) => endFunGame(npc, game, stars, perfect));
+  }
+  function endFunGame(npc, game, stars, perfect) {
+    const info = funGameInfo(game);
+    const total = stars + (perfect ? 1 : 0);
+    G.energy = Math.max(0, G.energy - info.energy);
+    G.tmin = Math.min(G.tmin + info.minutes, DAY_END - 10);
+    const id = 'game_' + game;
+    if (G.fun[id] !== G.day) {
+      G.fun[id] = G.day;
+      gainStars(total);
+      stats.lines.push('Played ' + info.label + ': ' + '★'.repeat(stars) + (perfect ? ' (perfect!)' : ''));
+      UI.toast('+' + total + ' stars!', 'star');
+    } else {
+      UI.toast('Again! That one is just for fun now.', 'sun');
+    }
+    mg = null;
+    state = 'play';
   }
 
   // ---------- sleeping ----------
@@ -215,7 +281,7 @@ const Game = (() => {
       G.day++;
       G.tmin = DAY_START;
       G.energy = 100;
-      G.done = { school: false, swim: false, ballet: false };
+      G.done = { school: false, swim: false, ballet: false, art: false };
       stats = { stars: 0, lines: [] };
       player.map = 'home'; player.x = 2.5; player.y = 2.7; player.dir = 'right';
       player.swimming = false; player.riding = false;
@@ -226,6 +292,149 @@ const Game = (() => {
       setLocation(UI.DAY_NAMES[dow()] + ' — Day ' + G.day);
       save();
     });
+  }
+
+  // ---------- little play animations ----------
+  // when Starry uses the slide, swings, see-saw, carousel, hopscotch or
+  // pony, a tiny cutscene takes over her position for a few seconds and
+  // then hands back control (rewards & dialogue fire when it finishes).
+  function sparkles(x, y) {
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + Math.random();
+      parts.push({ kind: 'spark', x, y, vx: Math.cos(a) * 1.6, vy: Math.sin(a) * 1.1 - 1.4, t: 0, dur: 0.6 });
+    }
+  }
+  function bubbles(x, y) {
+    for (let i = 0; i < 8; i++) {
+      parts.push({ kind: 'bub', x: x + (Math.random() - 0.5) * 0.8, y: y - Math.random() * 0.4,
+                   vx: (Math.random() - 0.5) * 0.5, vy: -0.9 - Math.random() * 0.8,
+                   t: 0, dur: 1.2 + Math.random() * 0.6, r: 3 + Math.random() * 5 });
+    }
+  }
+  function updateParts(dt) {
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.t += dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.kind === 'spark') p.vy += 3.5 * dt;
+      if (p.t >= p.dur) parts.splice(i, 1);
+    }
+  }
+  function drawParts(cam) {
+    for (const p of parts) {
+      const a = Math.max(0, 1 - p.t / p.dur);
+      const x = p.x * T - cam.x, y = p.y * T - cam.y;
+      if (p.kind === 'spark') {
+        ctx.fillStyle = `rgba(255,220,110,${a.toFixed(2)})`;
+        ctx.fillRect(x - 4, y - 1, 8, 3); ctx.fillRect(x - 1, y - 4, 3, 8);
+      } else {
+        ctx.strokeStyle = `rgba(215,240,255,${(a * 0.9).toFixed(2)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, p.r, 0, 7); ctx.stroke();
+      }
+    }
+  }
+
+  function landSpot(cands) {
+    for (const [x, y] of cands)
+      if (!Maps.isSolid(player.map, Math.floor(x), Math.floor(y)) &&
+          !Maps.isWater(player.map, Math.floor(x), Math.floor(y))) return { x, y };
+    return { x: cands[cands.length - 1][0], y: cands[cands.length - 1][1] };
+  }
+  function startAnim(type, f, dur, after) {
+    held.clear();
+    player.moving = false;
+    anim = { type, t: 0, dur, tx: f.x, ty: f.y, ox: player.x, oy: player.y, after, fired: {} };
+  }
+  function cue(id, at, fn) { if (!anim.fired[id] && anim.t >= at) { anim.fired[id] = true; fn(); } }
+  const lerp = (a, b, p) => a + (b - a) * p;
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+  function updateAnim(dt) {
+    const a = anim;
+    a.t += dt;
+    const p = clamp01(a.t / a.dur);
+    if (a.type === 'slide') {
+      const top = { x: a.tx + 0.25, y: a.ty + 0.5 };
+      a.land = a.land || landSpot([[a.tx + 1.2, a.ty + 1.35], [a.tx + 0.5, a.ty + 1.35], [a.ox, a.oy]]);
+      if (p < 0.35) {          // clamber up the ladder
+        const q = p / 0.35;
+        player.x = lerp(a.ox, top.x, q);
+        player.y = lerp(a.oy, top.y, q) - Math.abs(Math.sin(q * 9)) * 0.06;
+        player.dir = 'up';
+        cue('c', 0, () => AudioSys.sfx('step'));
+      } else if (p < 0.7) {    // WHEEE
+        const q = (p - 0.35) / 0.35;
+        player.x = lerp(top.x, a.land.x, q * q);
+        player.y = lerp(top.y, a.land.y, q * q);
+        player.dir = 'right';
+        cue('w', a.dur * 0.35, () => AudioSys.sfx('whee'));
+      } else {                 // a happy landing hop
+        player.x = a.land.x;
+        player.y = a.land.y - Math.abs(Math.sin((p - 0.7) / 0.3 * Math.PI)) * 0.25;
+        player.dir = 'down';
+        cue('l', a.dur * 0.7, () => { AudioSys.sfx('pop'); sparkles(a.land.x, a.land.y - 0.3); });
+        if (p >= 1) player.y = a.land.y;
+      }
+    } else if (a.type === 'swing') {
+      const px0 = a.tx + 0.5, py0 = a.ty + 0.15, L = 0.65;
+      const ramp = Math.min(1, a.t / 0.9) * clamp01((a.dur - a.t) / 0.7);
+      const th = Math.sin(a.t * 3.4) * 0.95 * ramp;
+      player.x = px0 + Math.sin(th) * L * 1.5;
+      player.y = py0 + Math.cos(th) * L;
+      player.dir = 'down';
+      cue('w1', 0.8, () => AudioSys.sfx('whee'));
+      cue('w2', 1.9, () => AudioSys.sfx('whee'));
+      if (p >= 1) {
+        const land = landSpot([[a.tx + 0.5, a.ty + 1.35], [a.ox, a.oy]]);
+        player.x = land.x; player.y = land.y;
+        sparkles(land.x, land.y - 0.3);
+      }
+    } else if (a.type === 'seesaw') {
+      const ramp = Math.min(1, a.t / 0.4) * clamp01((a.dur - a.t) / 0.4);
+      player.x = a.tx + 0.3;
+      player.y = a.ty + 0.75 - Math.abs(Math.sin(a.t * 5.5)) * 0.45 * ramp;
+      player.dir = 'down';
+      cue('w1', 0.4, () => AudioSys.sfx('whee'));
+      cue('w2', 1.4, () => AudioSys.sfx('whee'));
+      if (p >= 1) { player.x = a.ox; player.y = a.oy; }
+    } else if (a.type === 'carousel') {
+      const cx = a.tx + 0.5, cy = a.ty + 0.5, r = 1.05;
+      if (a.ang === undefined) a.ang = Math.atan2(a.oy - cy, a.ox - cx);
+      const sp = Math.min(1, a.t / 0.6) * clamp01((a.dur - a.t) / 0.6);
+      a.ang += dt * 3.6 * sp;
+      player.x = cx + Math.cos(a.ang) * r;
+      player.y = cy + Math.sin(a.ang) * r * 0.65 - Math.abs(Math.sin(a.t * 5)) * 0.12;
+      const vx = -Math.sin(a.ang), vy = Math.cos(a.ang) * 0.65;
+      player.dir = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? 'left' : 'right') : (vy < 0 ? 'up' : 'down');
+      cue('r', 0, () => AudioSys.sfx('ride'));
+      cue('w', 1.6, () => AudioSys.sfx('whee'));
+      if (p >= 1) { player.x = a.ox; player.y = a.oy; sparkles(a.ox, a.oy - 0.5); }
+    } else if (a.type === 'hop') {
+      const hops = 5, q = p * hops;
+      const i = Math.min(hops - 1, Math.floor(q));
+      player.x = a.tx + 0.5 + [-0.22, 0.22, -0.22, 0.22, 0][i];
+      player.y = a.ty + 0.7 - Math.abs(Math.sin(q * Math.PI)) * 0.3;
+      player.dir = 'down';
+      if (a.lastHop !== i) { a.lastHop = i; AudioSys.sfx('pop'); }
+      if (p >= 1) { player.x = a.ox; player.y = a.oy; }
+    } else if (a.type === 'pony') {
+      player.x = a.tx + 0.4;
+      player.y = a.ty + 0.55 - Math.abs(Math.sin(a.t * 4.5)) * 0.18;
+      player.dir = 'right';
+      cue('n', 0, () => AudioSys.sfx('neigh'));
+      cue('r', 0.5, () => AudioSys.sfx('ride'));
+      if (p >= 1) { player.x = a.ox; player.y = a.oy; sparkles(a.tx + 0.5, a.ty + 0.2); }
+    } else if (a.type === 'bounce') {
+      player.y = a.oy - Math.abs(Math.sin(a.t * 6)) * 0.35;
+      cue('p1', 0, () => AudioSys.sfx('pop'));
+      cue('p2', 0.55, () => AudioSys.sfx('pop'));
+      if (p >= 1) player.y = a.oy;
+    }
+    if (a.t >= a.dur) {
+      anim = null;
+      if (a.after) a.after();
+    }
   }
 
   // ---------- interaction ----------
@@ -246,10 +455,17 @@ const Game = (() => {
     q: ["The sign says: Mr. Scoop's Sweets! Ice cream and star cookies."],
     e: ['The sign says: Sunnybank Park! Slides, swings, and sandy toes.'],
     z: ['The mailbox is painted pink. Any letters for Starry? Not today!'],
-    i: ['The sign says: City Bus Stop! Hop on to ride between Starview Meadow and Starbright City.'],
+    i: ['The sign says: Bus Stop! Little buses go to the city, the beach, and the farm.'],
     l: ['The sign says: Storytime Library! Pick a book and read with Miss Paige.'],
     j: ['The sign says: Tippy Top Toys! Blocks, balls, and wind-up froggies.'],
     N: ['The sign says: Honey Bun Bakery! Muffins, cocoa, and twisty pretzels.'],
+    '(': ['The sign says: Rainbow Art Room! Painting with Mr. Doodle on weekend mornings.'],
+    '}': ['An easel with a half-painted rainbow. It needs two more colors!'],
+    '[': ['A stripey umbrella makes a circle of cool shade. Ahhh.'],
+    ')': ['A tall palm tree. Its big leaves go swish, swish, swish.'],
+    '8': ['A big bouncy hay bale. It smells like sunshine.'],
+    '?': ['The scarecrow tips his floppy hat. "Hello, Mr. Scarecrow!"'],
+    '"': ['Sunflowers taller than Starry! They all turn to look at the sun.'],
   };
 
   function facingTile() {
@@ -299,18 +515,20 @@ const Game = (() => {
       UI.toast('♥ ' + a.name + ' loves it! (' + G.treats + ' treats left)', 'paw');
       UI.say(a.name, [a.fed]);
       const sameMap = Entities.ANIMALS.filter(an => an.map === a.map);
-      if (sameMap.every(an => G.fedDay[an.id] === G.day)) award(a.map === 'city' ? 'zoo' : 'critters');
+      const mapSticker = { town: 'critters', city: 'zoo', farm: 'barnpals' }[a.map];
+      if (mapSticker && sameMap.every(an => G.fedDay[an.id] === G.day)) award(mapSticker);
     } else {
       UI.say(a.name, [a.hungry, 'Mr. Scoop sells Critter Treats at the sweet shop!']);
     }
   }
 
   function interact() {
+    if (anim) return;
     if (player.riding) return dismountHere();
     const npc = npcNearFace();
     if (npc) return talkTo(npc);
-    const anim = animalNear();
-    if (anim) return feedAnimal(anim);
+    const animal = animalNear();
+    if (animal) return feedAnimal(animal);
     if (bikeNear()) {
       player.riding = true;
       AudioSys.sfx('bell');
@@ -320,15 +538,16 @@ const Game = (() => {
     const f = facingTile();
     const ch = Maps.tileAt(player.map, f.x, f.y);
     if (ch === 'b' || ch === 'v') {
-      if (hour() >= 18) {
-        UI.choose('', 'All tucked in and sleepy?', [
-          { label: 'Goodnight! ☆', value: 'sleep' }, { label: 'Not yet', value: null },
-        ], v => { if (v) goToSleep(false); });
-      } else if (G.energy < 40) {
-        UI.choose('', 'A little nap to recharge?', [
-          { label: 'Nap time', value: 'nap' }, { label: 'No nap!', value: null },
-        ], v => { if (v) goToSleep(true); });
-      } else UI.say('Starry', ['Not sleepy yet! The day is still big.']);
+      // Starry can snuggle in any time — a quick nap, or sleep the whole
+      // day away and wake up to a brand new one.
+      const opts = [];
+      if (hour() < 20) opts.push({ label: 'Just a nap', value: 'nap' });
+      opts.push({ label: hour() >= 18 ? 'Goodnight! ☆' : 'Sleep until tomorrow ☆', value: 'sleep' });
+      opts.push({ label: 'Not yet', value: null });
+      UI.choose('', hour() >= 18 ? 'All tucked in and sleepy?' : 'Snuggle into the cozy bed?', opts, v => {
+        if (v === 'nap') goToSleep(true);
+        else if (v === 'sleep') goToSleep(false);
+      });
       return;
     }
     if (ch === 'y') {
@@ -346,17 +565,19 @@ const Game = (() => {
       return;
     }
     if (ch === 'd') {
-      AudioSys.sfx('whee');
-      funReward('slide', 1);
-      award('whee');
-      UI.say('Starry', ['Up the ladder... aaaand... WHEEEE!']);
+      startAnim('slide', f, 1.7, () => {
+        funReward('slide', 1);
+        award('whee');
+        UI.say('Starry', ['Up the ladder... aaaand... WHEEEE!']);
+      });
       return;
     }
     if (ch === 'g') {
-      AudioSys.sfx('whee');
-      funReward('swing', 1);
-      award('swing');
-      UI.say('Starry', ['Higher! Higher! Starry can almost touch the clouds!']);
+      startAnim('swing', f, 3.4, () => {
+        funReward('swing', 1);
+        award('swing');
+        UI.say('Starry', ['Higher! Higher! Starry can almost touch the clouds!']);
+      });
       return;
     }
     if (ch === 'w') {
@@ -373,6 +594,7 @@ const Game = (() => {
     }
     if (ch === 'F') {
       AudioSys.sfx('sparkle');
+      sparkles(f.x + 0.5, f.y + 0.1);
       const first = funReward('wish', 1);
       award('wish');
       UI.say('Starry', [first ? 'Starry makes a wish — and spots a lucky shiny coin by the rim!'
@@ -388,35 +610,80 @@ const Game = (() => {
       return;
     }
     if (ch === 'J') {
-      AudioSys.sfx('whee');
-      funReward('seesaw', 1);
-      award('seesaw');
-      UI.say('Starry', ['Up... and down... and UP! The see-saw goes wheee — bonk!']);
+      startAnim('seesaw', f, 2.3, () => {
+        funReward('seesaw', 1);
+        award('seesaw');
+        UI.say('Starry', ['Up... and down... and UP! The see-saw goes wheee — bonk!']);
+      });
       return;
     }
     if (ch === '@') {
-      AudioSys.sfx('ride');
-      const first = funReward('carousel', 2);
-      award('carousel');
-      UI.say('Starry', [first ? 'Round and round on a sparkly horsie! The ticket man gives Starry TWO gold stars!'
-                              : 'Another loop on the carousel! Starry waves on every single turn.']);
+      startAnim('carousel', f, 3.6, () => {
+        const first = funReward('carousel', 2);
+        award('carousel');
+        UI.say('Starry', [first ? 'Round and round on a sparkly horsie! The ticket man gives Starry TWO gold stars!'
+                                : 'Another loop on the carousel! Starry waves on every single turn.']);
+      });
+      return;
+    }
+    if (ch === '9') {
+      startAnim('pony', f, 2.8, () => {
+        const first = funReward('pony', 2);
+        award('pony');
+        UI.say('Starry', [first ? 'Clip, clop! Buttercup gives Starry a gentle little ride. Best pony EVER.'
+                                : 'Buttercup nuzzles Starry\'s hair. One more little trot around the paddock!']);
+      });
+      return;
+    }
+    if (ch === ']') {
+      startAnim('bounce', f, 1.3, () => {
+        funReward('beachball', 1);
+        award('beachball');
+        UI.say('Starry', ['Boing! Boing! Starry bops the big stripey ball SO high!']);
+      });
+      return;
+    }
+    if (ch === '{') {
+      AudioSys.sfx('moo');
+      funReward('moo', 1);
+      award('moo');
+      UI.say('Daisy', ['Mooooo! (Daisy the cow says hello with her whole heart.)']);
       return;
     }
     if (ch === 'I') {
-      AudioSys.sfx('pop');
-      funReward('balloon', 1);
-      award('balloon');
-      UI.say('Starry', ['A big shiny balloon, just for Starry! She holds the string SO tight.']);
+      UI.choose('Balloon Cart', 'The balloons bob up and down in the breeze.', [
+        { label: 'Play Balloon Bop', value: 'game' },
+        { label: 'Take a balloon', value: 'take' },
+        { label: 'Not now', value: null },
+      ], v => {
+        if (v === 'game') startFunGame({ name: 'Balloon Cart' }, 'balloonbop');
+        else if (v === 'take') {
+          AudioSys.sfx('pop');
+          funReward('balloon', 1);
+          award('balloon');
+          UI.say('Starry', ['A big shiny balloon, just for Starry! She holds the string SO tight.']);
+        }
+      });
       return;
     }
     if (ch === 'V') {
-      AudioSys.sfx('sparkle');
-      funReward('bubbles', 1);
-      award('bubbles');
-      UI.say('Starry', ['Big bubbles, little bubbles, a WHOLE bunch of bubbles! Pop! Pop! Pop!']);
+      UI.choose('Bubble Stand', 'A tray of bubble wands glitters in the sun.', [
+        { label: 'Play Bubble Pop', value: 'game' },
+        { label: 'Blow bubbles', value: 'blow' },
+        { label: 'Not now', value: null },
+      ], v => {
+        if (v === 'game') startFunGame({ name: 'Bubble Stand' }, 'bubblepop');
+        else if (v === 'blow') {
+          AudioSys.sfx('sparkle');
+          bubbles(player.x, player.y - 1.0);
+          funReward('bubbles', 1);
+          award('bubbles');
+          UI.say('Starry', ['Big bubbles, little bubbles, a WHOLE bunch of bubbles! Pop! Pop! Pop!']);
+        }
+      });
       return;
     }
-    // things you can be standing right on top of (flowers, sandcastle, hopscotch)
+    // things you can be standing right on top of (flowers, shells, hopscotch...)
     const here = Maps.tileAt(player.map, Math.floor(player.x), Math.floor(player.y - 0.15));
     if (ch === '*' || here === '*') {
       AudioSys.sfx('pop');
@@ -432,11 +699,39 @@ const Game = (() => {
       UI.say('Starry', ['Pat, pat, pat... a sandcastle with a flag on top! Nobody step on it.']);
       return;
     }
+    if (ch === 'Z' || here === 'Z') {
+      AudioSys.sfx('sparkle');
+      sparkles(player.x, player.y - 0.6);
+      const first = funReward('shells', 1);
+      award('shell');
+      UI.say('Starry', [first ? 'A swirly pink seashell! Starry holds it to her ear... it goes whoosh!'
+                              : 'Another pretty shell for the bucket. This one sparkles!']);
+      return;
+    }
+    if (ch === '$' || here === '$') {
+      AudioSys.sfx('munch');
+      const first = funReward('veggie', 0, 15);
+      award('carrot');
+      UI.say('Starry', [first ? 'Pull... pull... POP! A big orange carrot! *crunch crunch*'
+                              : 'The other carrots need more sleep in the dirt, says Farmer Fern.']);
+      return;
+    }
     if (ch === 'U' || here === 'U') {
-      AudioSys.sfx('whee');
-      funReward('hop', 1);
-      award('hop');
-      UI.say('Starry', ['One foot, two foot, hop-hop-HOP! Starry did the whole hopscotch!']);
+      const hx = ch === 'U' ? f : { x: Math.floor(player.x), y: Math.floor(player.y - 0.15) };
+      UI.choose('Hopscotch', 'The chalk squares are ready for tiny feet.', [
+        { label: 'Play Hopscotch Hero', value: 'game' },
+        { label: 'Hop across', value: 'hop' },
+        { label: 'Not now', value: null },
+      ], v => {
+        if (v === 'game') startFunGame({ name: 'Hopscotch' }, 'hopscotch');
+        else if (v === 'hop') {
+          startAnim('hop', hx, 2.1, () => {
+            funReward('hop', 1);
+            award('hop');
+            UI.say('Starry', ['One foot, two foot, hop-hop-HOP! Starry did the whole hopscotch!']);
+          });
+        }
+      });
       return;
     }
     if (FLAVOR[ch]) UI.say('', FLAVOR[ch]);
@@ -448,17 +743,46 @@ const Game = (() => {
     ns.pauseT = 2.5;
     ns.dir = player.x < ns.x - 0.3 ? 'left' : player.x > ns.x + 0.3 ? 'right' : (player.y < ns.y ? 'up' : 'down');
     if (npc.shop) return openShop(npc);
+    const freeGames = npc.freeGames || [];
     if (npc.teaches && classAvailable(npc.teaches)) {
       const c = CLASS_INFO[npc.teaches];
-      if (G.energy < 20) {
-        UI.say(npc.name, ['Oh my, those are sleepy eyes! Have a snack or a nap first, little one.']);
-        return;
-      }
-      UI.choose(npc.name, c.prompt, [
-        { label: "Let's go!", value: 'yes' }, { label: 'Not yet', value: null },
-      ], v => { if (v) startClass(npc.teaches); });
+      const opts = [{ label: "Let's go!", value: 'class' }];
+      for (const game of freeGames) opts.push({ label: game.label || funGameInfo(game.game).label, value: game.game });
+      opts.push({ label: 'Not yet', value: null });
+      UI.choose(npc.name, c.prompt, opts, v => {
+        if (v === 'class') {
+          if (G.energy < 20) {
+            UI.say(npc.name, ['Oh my, those are sleepy eyes! Have a snack or a nap first, little one.']);
+            return;
+          }
+          startClass(npc.teaches);
+        } else if (v) startFunGame(npc, v);
+      });
       return;
     }
+    if (freeGames.length) {
+      const opts = freeGames.map(game => ({ label: game.label || funGameInfo(game.game).label, value: game.game }));
+      opts.push({ label: 'Just saying hi', value: 'hi' });
+      UI.choose(npc.name, npc.freeGamePrompt || 'What shall we play?', opts, v => {
+        if (v === 'hi') chatWith(npc);
+        else if (v) startFunGame(npc, v);
+      });
+      return;
+    }
+    if (npc.game) {
+      UI.choose(npc.name, npc.gamePrompt, [
+        { label: "Let's play!", value: 'play' },
+        { label: 'Just saying hi', value: 'hi' },
+      ], v => {
+        if (v === 'play') startFunGame(npc);
+        else if (v === 'hi') chatWith(npc);
+      });
+      return;
+    }
+    chatWith(npc);
+  }
+
+  function chatWith(npc) {
     const gv = gview();
     let lines = npc.talk(gv) || [];
     if (npc.id !== 'mom' && lines.length > 1) lines = [lines[G.day % lines.length]];
@@ -548,7 +872,8 @@ const Game = (() => {
       player.x = w.x + 0.5;
       player.y = w.y + 0.85;
       player.dir = w.dir;
-      if (w.map === 'city') award('citytrip');
+      const trip = { city: 'citytrip', beach: 'beachtrip', farm: 'farmtrip' }[w.map];
+      if (trip) award(trip);
       setLocation(Maps.get(w.map).label);
     });
   }
@@ -616,6 +941,7 @@ const Game = (() => {
     G.tmin += dt * MIN_PER_SEC;
     const d = dow();
     if (crossed(8 * 60 + 40) && d <= 4 && !G.done.school) UI.toast('School starts at 9! Off to Sunny Sprouts!', 'block');
+    if (crossed(8 * 60 + 40) && d >= 5 && !G.done.art) UI.toast('Art class with Mr. Doodle at 9!', 'palette');
     if (crossed(13 * 60 + 40)) {
       if ((d === 0 || d === 2 || d === 4) && !G.done.ballet) UI.toast('Ballet with Madame Plié at 2!', 'shoe');
       if ((d === 1 || d === 3) && !G.done.swim) UI.toast('Swim class with Coach Finn at 2!', 'drop');
@@ -640,11 +966,12 @@ const Game = (() => {
     if (state === 'play') {
       UI.dialogUpdate(dt);
       if (!UI.active() && !fade) {
-        updatePlayer(dt);
-        updateClock(dt);
+        if (anim) updateAnim(dt);      // a little play cutscene has the wheel
+        else { updatePlayer(dt); updateClock(dt); }
       }
       updateNPCs(dt);
       updateAnimals(dt);
+      updateParts(dt);
       if (player.map === 'town') updateDucks(dt);
       if (waterHintT > 0) waterHintT -= dt;
       if (locT > 0) locT -= dt * 0.6;
@@ -689,6 +1016,14 @@ const Game = (() => {
         }
       }
     }
+    // toys Starry bought sit out on her bedroom floor
+    if (player.map === 'home' && G.toys.length) {
+      const TOY_SPOTS = { teddy: [2.4, 3.6], froggy: [3.4, 4.3], bball: [2.2, 5.0], storybook: [3.7, 3.3] };
+      for (const id of G.toys) {
+        const s = TOY_SPOTS[id], ic = SpriteLib.icon(TOY_ICONS[id]);
+        if (s && ic) ctx.drawImage(ic, Math.floor(s[0] * T - 15 - cam.x), Math.floor(s[1] * T - 15 - cam.y), 30, 30);
+      }
+    }
     // entities sorted by y
     const ents = [];
     for (const n of Entities.NPCS) {
@@ -716,13 +1051,16 @@ const Game = (() => {
     }
     ents.sort((a, b) => a.y - b.y);
     for (const e of ents) e.draw();
+    drawParts(cam);
     drawButterflies(cam);
     // interaction hint
-    if (state === 'play' && !UI.active() && !fade && !player.riding) {
+    if (state === 'play' && !UI.active() && !fade && !player.riding && !anim) {
       const npc = npcNearFace();
       const f = facingTile();
       const ch = Maps.tileAt(player.map, f.x, f.y);
-      if (npc || animalNear() || bikeNear() || 'bvyQdgwhFYJ@I*&UV'.includes(ch) || FLAVOR[ch]) {
+      const here = Maps.tileAt(player.map, Math.floor(player.x), Math.floor(player.y - 0.15));
+      if (npc || animalNear() || bikeNear() || 'bvyQdgwhFYJ@I*&UVZ]9${'.includes(ch) ||
+          '*&UZ$'.includes(here) || FLAVOR[ch]) {
         const bx = player.x * T - cam.x, by = (player.y - 1) * T - cam.y - 46;
         ctx.fillStyle = 'rgba(255,250,240,.92)';
         ctx.beginPath(); ctx.arc(bx, by, 13, 0, 7); ctx.fill();
@@ -806,6 +1144,14 @@ const Game = (() => {
       { x: 16.5, y: 26.5, c: '#ff9ec5', p: 0.4 }, { x: 46.5, y: 30.5, c: '#ffd166', p: 2.0 },
       { x: 40.5, y: 33.5, c: '#cdb0ee', p: 4.0 }, { x: 9.5, y: 30.0, c: '#a8d8e8', p: 1.5 },
       { x: 52.5, y: 24.5, c: '#ff9ec5', p: 3.1 },
+    ],
+    beach: [
+      { x: 8.5, y: 9.5, c: '#ffd166', p: 0.8 }, { x: 25.5, y: 6.5, c: '#ff9ec5', p: 2.4 },
+      { x: 33.5, y: 13.5, c: '#a8d8e8', p: 4.4 },
+    ],
+    farm: [
+      { x: 10.5, y: 12.5, c: '#ff9ec5', p: 0.3 }, { x: 24.5, y: 18.5, c: '#ffd166', p: 1.9 },
+      { x: 33.5, y: 8.5, c: '#cdb0ee', p: 3.6 }, { x: 38.5, y: 24.5, c: '#a8d8e8', p: 5.2 },
     ],
   };
   function drawButterflies(cam) {
