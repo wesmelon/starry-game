@@ -104,6 +104,7 @@ export const Entities = (() => {
       id: 'honey', name: 'Mrs. Honey', sprite: 'honey', radius: 1, shop: true, bakery: true,
       shopName: 'Mrs. Honey', greeting: 'Fresh from the oven, little Starry! What smells good?',
       stock: ['muffin', 'cocoa', 'pretzel'],
+      freeGames: [{ game: 'cookiehelper', label: 'Help decorate cookies' }],
       where: () => ({ map: 'cafe', x: 5, y: 1 }),
       talk: () => [],
     },
@@ -117,6 +118,8 @@ export const Entities = (() => {
     // ---- weekend art class in town ----
     {
       id: 'doodle', name: 'Mr. Doodle', sprite: 'doodle', radius: 1, teaches: 'art',
+      freeGames: [{ game: 'stampstudio', label: 'Play Stamp Studio' }],
+      freeGamePrompt: 'The stamp pads are ready! Want to make a tiny pattern?',
       where: () => ({ map: 'art', x: 5, y: 5 }),
       talk: () => ['Welcome to the Rainbow Art Room! Smocks on, sleeves up!',
                    'There are no scribbles here. Only very fast rainbows.',

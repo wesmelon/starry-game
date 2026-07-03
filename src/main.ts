@@ -232,11 +232,15 @@ export const Game = (() => {
       .filter((it): it is NonNullable<typeof it> => !!it)
       .filter(it => !(it.toy && G.toys.includes(it.id)));   // each toy comes home once
     const opts: ChoiceOpt[] = stock.map(it => ({ label: it.name + '  (' + it.cost + '★)', value: it.id }));
+    for (const game of npc.freeGames || []) {
+      opts.push({ label: game.label || funGameInfo(game.game).label, value: '__game:' + game.game });
+    }
     if (npc.story) opts.push({ label: 'Read a story ♪', value: '__story' });
     opts.push({ label: 'Just looking!', value: null });
     const who = npc.shopName || npc.name;
     UI.choose(who, npc.greeting || 'What would you like?', opts, (val) => {
       if (val === '__story') return storyTime(npc);
+      if (val && val.startsWith('__game:')) return startFunGame(npc, val.slice(7));
       if (!val) return;
       const it = Entities.SHOP_ITEMS.find(i => i.id === val);
       if (!it) return;
@@ -270,16 +274,10 @@ export const Game = (() => {
   }
 
   // ---------- just-for-fun minigames ----------
-  const FUN_GAME_INFO: Record<string, { label: string; energy: number; minutes: number; minEnergy: number }> = {
-    shells:  { label: 'Shell Splash', energy: 12, minutes: 40, minEnergy: 15 },
-    veggies: { label: 'Veggie Round-up', energy: 12, minutes: 40, minEnergy: 15 },
-    math:    { label: 'Number Time', energy: 0, minutes: 20, minEnergy: 0 },
-    bubblepop:  { label: 'Bubble Pop', energy: 8, minutes: 25, minEnergy: 10 },
-    balloonbop: { label: 'Balloon Bop', energy: 8, minutes: 25, minEnergy: 10 },
-    hopscotch:  { label: 'Hopscotch Hero', energy: 8, minutes: 25, minEnergy: 10 },
-  };
+  // label / energy / minutes / minEnergy live in each game's registration
+  // (see MinigameMeta in minigames.ts) — one place to define a game.
   function funGameInfo(game: string) {
-    return FUN_GAME_INFO[game] || { label: game, energy: 12, minutes: 40, minEnergy: 15 };
+    return Minigames.meta(game) || { label: game, energy: 12, minutes: 40, minEnergy: 15 };
   }
   function startFunGame(npc: { name: string; game?: string }, game?: string) {
     game = game || npc.game || '';
@@ -1257,6 +1255,9 @@ export const Game = (() => {
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
     KeyE: 'action', Enter: 'action', Space: 'action', Escape: 'back',
   };
+  function keyLetter(code: string): string | null {
+    return /^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase() : null;
+  }
 
   function newGame() {
     G = freshG();
@@ -1294,12 +1295,18 @@ export const Game = (() => {
   function onKey(e: KeyboardEvent) {
     if (e.repeat && state !== 'play') return;
     const act = CODE_MAP[e.code];
-    if (CODE_MAP[e.code] || ['KeyB', 'KeyJ', 'KeyM', 'KeyN'].includes(e.code)) e.preventDefault();
+    const alpha = state === 'minigame' ? keyLetter(e.code) : null;
+    if (CODE_MAP[e.code] || alpha || ['KeyB', 'KeyJ', 'KeyM', 'KeyN'].includes(e.code)) e.preventDefault();
     if (!audioReady) {
       AudioSys.init(); AudioSys.resume();
       audioReady = true;
     }
     AudioSys.resume();
+    if (state === 'minigame' && mg) {
+      if (mg.inputMode === 'letters' && alpha) { mg.key(alpha); return; }
+      if (act) { mg.key(act); return; }
+      if (mg.inputMode === 'letters') return;
+    }
     if (e.code === 'KeyN') {
       const on = AudioSys.toggleMusic();
       UI.toast(on ? 'Music on ♪' : 'Music off', 'note');
@@ -1316,7 +1323,6 @@ export const Game = (() => {
       }
       return;
     }
-    if (state === 'minigame' && mg) { if (act) mg.key(act); return; }
     if (state === 'summary') {
       if (act === 'action' && summaryT > 0.8) { AudioSys.sfx('confirm'); newDay(); }
       return;

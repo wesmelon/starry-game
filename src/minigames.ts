@@ -8,10 +8,33 @@
 
 import { AudioSys } from './audio';
 import { SpriteLib } from './sprites';
-import type { Minigame, MinigameDone } from './types';
+import type { Minigame, MinigameDone, MinigameInputMode } from './types';
 
 type Ctx = CanvasRenderingContext2D;
 type MinigameCtor = new (done: MinigameDone) => Minigame;
+
+/** Everything the rest of the game needs to know about a minigame lives
+    here, next to its registration — launchers read the reward economics
+    and the smoke test reads `keys`, so registering a game is the ONLY
+    integration step besides giving it a launcher in the world. */
+export interface MinigameMeta {
+  /** shown in menus, day summaries, and toasts */
+  label: string;
+  /** energy Starry spends playing (default 12) */
+  energy: number;
+  /** in-game minutes that pass (default 40) */
+  minutes: number;
+  /** minimum energy needed to start (default 15) */
+  minEnergy: number;
+  /** inputs the headless smoke test mashes to finish the game;
+      list the keys your handleInput() actually reacts to */
+  keys: string[];
+  /** one-line description for docs and future tooling */
+  description: string;
+}
+export type MinigameMetaInput =
+  Partial<MinigameMeta> & Pick<MinigameMeta, 'label' | 'keys' | 'description'>;
+
 interface QuizCfg {
   rounds?: number;
   title: string;
@@ -105,6 +128,7 @@ export const Minigames = (() => {
   const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
   class BaseMinigame {
+    inputMode: MinigameInputMode;
     done: MinigameDone;
     phase: string;
     t: number;
@@ -112,6 +136,7 @@ export const Minigames = (() => {
     stars: number;
     perfect: boolean;
     constructor(done: MinigameDone) {
+      this.inputMode = 'actions';
       this.done = done;
       this.phase = 'intro';
       this.t = 0;
@@ -120,8 +145,9 @@ export const Minigames = (() => {
       this.perfect = false;
     }
     key(act: string) {
-      if (this.phase === 'intro' && act === 'action') { this.start(); return; }
-      if (this.phase === 'result' && act === 'action' && this.rt > 1) { this.done(this.stars, this.perfect); return; }
+      const menuAction = act === 'action' || (this.inputMode === 'letters' && act === 'e');
+      if (this.phase === 'intro' && menuAction) { this.start(); return; }
+      if (this.phase === 'result' && menuAction && this.rt > 1) { this.done(this.stars, this.perfect); return; }
       this.handleInput(act);
     }
     start() {
@@ -566,6 +592,10 @@ export const Minigames = (() => {
     right: { name: 'Twirl right!', note: 'G5' },
   };
   const DIRS: string[] = ['up', 'down', 'left', 'right'];
+  const BALLET_FIRST_STEP_DELAY = 1.15;
+  const BALLET_SHOW_STEP_DELAY = 1.1;
+  const BALLET_FLASH_TIME = 0.65;
+  const BALLET_ROUND_PAUSE = 1.7;
 
   class BalletMinigame extends BaseMinigame {
     round: number;
@@ -602,19 +632,19 @@ export const Minigames = (() => {
       for (let i = 0; i < len; i++) this.seq.push(DIRS[Math.floor(Math.random() * 4)]);
       this.phase = 'show';
       this.showI = 0;
-      this.showT = 0.8;
+      this.showT = BALLET_FIRST_STEP_DELAY;
       this.inputI = 0;
       this.msg = 'Watch Madame...';
       this.msgT = 99;
     }
-    flashDir(d: string, good: boolean) { this.flash[d] = { t: 0.35, good }; }
+    flashDir(d: string, good: boolean) { this.flash[d] = { t: good ? BALLET_FLASH_TIME : 0.45, good }; }
     nextRound() {
       this.round++;
       if (this.round >= 3) {
         this.complete(Math.max(1, this.passed), this.mistakes === 0);
       } else {
         this.phase = 'wait';
-        this.waitT = 1.3;
+        this.waitT = BALLET_ROUND_PAUSE;
       }
     }
     handleInput(act: string) {
@@ -650,7 +680,7 @@ export const Minigames = (() => {
             const d = this.seq[this.showI];
             AudioSys.sfx('note', POSES[d].note);
             this.flashDir(d, true);
-            this.showI++; this.showT = 0.65;
+            this.showI++; this.showT = BALLET_SHOW_STEP_DELAY;
           } else {
             this.phase = 'input';
             this.msg = 'Your turn, little star!'; this.msgT = 99;
@@ -776,6 +806,253 @@ export const Minigames = (() => {
     resultSub() { return this.score + ' of 5 — hang it on the fridge!'; }
   }
 
+  /* ================= ART HOUSE : Stamp Studio ================= */
+  const STAMP_SHAPES = ['circle', 'square', 'triangle', 'star', 'heart'];
+  const STAMP_COLORS: [string, string][] = [
+    ['red', '#e85a5a'], ['blue', '#5a8ae8'], ['green', '#6ab85f'],
+    ['yellow', '#f0c040'], ['pink', '#f08ab8'], ['purple', '#9a7ad0'],
+  ];
+  interface StampOption { shape: string; colorName: string; color: string; }
+
+  class StampStudioMinigame extends BaseMinigame {
+    total: number;
+    round: number;
+    score: number;
+    sel: number;
+    fb: number;
+    fbGood: boolean;
+    target: StampOption | null;
+    opts: StampOption[];
+    ans: number;
+    constructor(done: MinigameDone) {
+      super(done);
+      this.total = 8;
+      this.round = 0;
+      this.score = 0;
+      this.sel = 0;
+      this.fb = 0;
+      this.fbGood = false;
+      this.target = null;
+      this.opts = [];
+      this.ans = 0;
+    }
+    start() {
+      this.phase = 'play';
+      this.newStamp();
+      AudioSys.sfx('confirm');
+    }
+    makeOption(shape?: string, color?: [string, string]): StampOption {
+      const s = shape || STAMP_SHAPES[Math.floor(Math.random() * STAMP_SHAPES.length)];
+      const c = color || STAMP_COLORS[Math.floor(Math.random() * STAMP_COLORS.length)];
+      return { shape: s, colorName: c[0], color: c[1] };
+    }
+    sameStamp(a: StampOption, b: StampOption) {
+      return a.shape === b.shape && a.colorName === b.colorName;
+    }
+    newStamp() {
+      const target = this.makeOption();
+      const opts = [target];
+      let guard = 0;
+      while (opts.length < 4 && guard++ < 60) {
+        const next = this.makeOption();
+        if (!opts.some(o => this.sameStamp(o, next))) opts.push(next);
+      }
+      this.opts = pickN(opts, 4);
+      this.target = target;
+      this.ans = this.opts.findIndex(o => this.sameStamp(o, target));
+      this.sel = 0;
+      this.fb = 0;
+      this.fbGood = false;
+    }
+    handleInput(act: string) {
+      if (this.phase !== 'play' || this.fb > 0) return;
+      if (act === 'left') { this.sel = this.sel % 2 === 0 ? this.sel : this.sel - 1; AudioSys.sfx('blip'); }
+      else if (act === 'right') { this.sel = this.sel % 2 === 1 ? this.sel : this.sel + 1; AudioSys.sfx('blip'); }
+      else if (act === 'up') { this.sel = this.sel < 2 ? this.sel : this.sel - 2; AudioSys.sfx('blip'); }
+      else if (act === 'down') { this.sel = this.sel >= 2 ? this.sel : this.sel + 2; AudioSys.sfx('blip'); }
+      else if (act === 'action') {
+        this.fbGood = this.sel === this.ans;
+        this.fb = this.fbGood ? 0.55 : 0.85;
+        if (this.fbGood) { this.score++; AudioSys.sfx('star'); } else AudioSys.sfx('deny');
+      }
+    }
+    updatePlay(dt: number) {
+      if (this.phase !== 'play' || this.fb <= 0) return;
+      this.fb -= dt;
+      if (this.fb > 0) return;
+      this.round++;
+      if (this.round >= this.total) {
+        this.complete(this.score >= 7 ? 3 : this.score >= 4 ? 2 : 1, this.score === this.total);
+      } else {
+        this.newStamp();
+      }
+    }
+    drawStamp(g: Ctx, stamp: StampOption, cx: number, cy: number, r: number, pale = false) {
+      g.save();
+      if (pale) g.globalAlpha = 0.34;
+      drawShape(g, stamp.shape, cx, cy, r, stamp.color);
+      g.restore();
+    }
+    draw(g: Ctx) {
+      const W = g.canvas.width, H = g.canvas.height;
+      g.fillStyle = '#f1e8d4'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#dbe8f1'; g.fillRect(0, H - 155, W, 155);
+      g.fillStyle = '#caa07a'; g.fillRect(W / 2 - 260, 118, 520, 18);
+      g.fillRect(W / 2 - 18, 126, 36, 210);
+      g.strokeStyle = '#8a6a4a'; g.lineWidth = 6;
+      rr(g, W / 2 - 235, 52, 470, 200, 14); g.stroke();
+      g.fillStyle = '#fffdf5'; rr(g, W / 2 - 225, 62, 450, 180, 12); g.fill();
+      if (this.phase === 'intro') {
+        panel(g, W / 2 - 320, 300, 640, 190, '#fff8ee');
+        label(g, 'Stamp Studio!', W / 2, 355, 36, '#b85c8a');
+        label(g, 'Mr. Doodle calls out a colored shape.', W / 2, 405, 21, '#5a4a6a');
+        label(g, 'Pick the matching stamp with arrows, then press E!', W / 2, 440, 21, '#b85c8a');
+        sprite(g, 'doodle', 'down', 0, W / 2, H - 40, 4);
+        return;
+      }
+      if (this.phase === 'result') {
+        resultScreen(g, W, H, this.score >= 7 ? 'Stamp-tastic!' : 'Lovely stamping!',
+          this.score + ' of ' + this.total + ' stamps matched!', this.stars, this.rt);
+        return;
+      }
+      if (!this.target) return;
+      label(g, 'Stamp a ' + this.target.colorName + ' ' + this.target.shape + '!', W / 2, 88, 30, '#5a4a6a');
+      this.drawStamp(g, this.target, W / 2, 168, 48);
+      label(g, 'Stamp ' + (this.round + 1) + ' of ' + this.total + '   ·   ★ ' + this.score, W / 2, 285, 20, '#9a7ad0');
+      const ox = W / 2 - 165, oy = 330;
+      for (let i = 0; i < 4; i++) {
+        const x = ox + (i % 2) * 330;
+        const y = oy + Math.floor(i / 2) * 145;
+        const isSel = i === this.sel;
+        let fill = isSel ? '#fff' : '#fff8ee';
+        if (this.fb > 0 && i === this.ans) fill = '#d8f5c8';
+        if (this.fb > 0 && !this.fbGood && isSel) fill = '#f8d0d0';
+        panel(g, x - 95, y - 55 + (isSel ? -8 : 0), 190, 110, fill);
+        if (isSel) { rr(g, x - 95, y - 63, 190, 110, 18); g.strokeStyle = '#ffb84f'; g.lineWidth = 5; g.stroke(); }
+        this.drawStamp(g, this.opts[i], x, y + (isSel ? -8 : 0), 33);
+        label(g, this.opts[i].colorName, x, y + 48 + (isSel ? -8 : 0), 16, '#7a6a8a');
+      }
+      sprite(g, 'doodle', 'down', Math.floor(this.t * 3) % 2 ? 1 : 2, 110, H - 35, 3.5);
+      sprite(g, 'starry', 'down', Math.floor(this.t * 3) % 2 ? 2 : 1, W - 110, H - 35, 3.5);
+    }
+  }
+
+  /* ================= BAKERY : Cookie Helper ================= */
+  interface BakeryTopping { name: string; kind: string; color: string; }
+  const BAKERY_TOPPINGS: BakeryTopping[] = [
+    { name: 'pink frosting', kind: 'frosting', color: '#f08ab8' },
+    { name: 'sprinkles', kind: 'sprinkles', color: '#5a8ae8' },
+    { name: 'berries', kind: 'berries', color: '#e85a5a' },
+    { name: 'choc chips', kind: 'chips', color: '#6b4328' },
+    { name: 'sugar stars', kind: 'stars', color: '#ffd95f' },
+    { name: 'heart candies', kind: 'hearts', color: '#f06a8a' },
+  ];
+
+  function drawCookieTopping(g: Ctx, kind: string, cx: number, cy: number, r: number, col: string) {
+    if (kind === 'frosting') {
+      g.fillStyle = col;
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3 + 0.25;
+        g.beginPath(); g.arc(cx + Math.cos(a) * r * .34, cy + Math.sin(a) * r * .24, r * .18, 0, 7); g.fill();
+      }
+      g.beginPath(); g.arc(cx, cy, r * .34, 0, 7); g.fill();
+    } else if (kind === 'sprinkles') {
+      const cols = ['#e85a5a', '#5a8ae8', '#6ab85f', '#ffd95f', '#9a7ad0'];
+      g.lineWidth = Math.max(3, r * .08);
+      for (let i = 0; i < 10; i++) {
+        const a = i * 1.7;
+        const x = cx + Math.cos(a) * r * (0.18 + (i % 3) * .16);
+        const y = cy + Math.sin(a * .8) * r * .48;
+        g.strokeStyle = cols[i % cols.length];
+        g.beginPath(); g.moveTo(x - r * .09, y - r * .04); g.lineTo(x + r * .09, y + r * .04); g.stroke();
+      }
+    } else if (kind === 'berries') {
+      g.fillStyle = col;
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + i * Math.PI * 2 / 5;
+        g.beginPath(); g.arc(cx + Math.cos(a) * r * .42, cy + Math.sin(a) * r * .34, r * .13, 0, 7); g.fill();
+      }
+    } else if (kind === 'chips') {
+      g.fillStyle = col;
+      for (let i = 0; i < 7; i++) {
+        const a = i * 2.2;
+        const x = cx + Math.cos(a) * r * (0.2 + (i % 2) * .22);
+        const y = cy + Math.sin(a) * r * .38;
+        g.beginPath(); g.moveTo(x, y - r * .11); g.lineTo(x + r * .12, y + r * .1); g.lineTo(x - r * .12, y + r * .1); g.closePath(); g.fill();
+      }
+    } else if (kind === 'stars') {
+      for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 2 / 5;
+        starPath(g, cx + Math.cos(a) * r * .42, cy + Math.sin(a) * r * .35, r * .12);
+        g.fillStyle = col; g.fill();
+      }
+    } else {
+      for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 2 / 5 + .3;
+        drawShape(g, 'heart', cx + Math.cos(a) * r * .42, cy + Math.sin(a) * r * .35, r * .13, col);
+      }
+    }
+  }
+
+  function drawCookie(g: Ctx, cx: number, cy: number, r: number, topping?: BakeryTopping) {
+    g.fillStyle = '#d69a5b';
+    g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+    g.strokeStyle = '#9d673d'; g.lineWidth = Math.max(3, r * .08); g.stroke();
+    g.fillStyle = '#8a5432';
+    for (let i = 0; i < 5; i++) {
+      const a = i * 1.45 + .4;
+      g.beginPath(); g.arc(cx + Math.cos(a) * r * .48, cy + Math.sin(a) * r * .38, r * .08, 0, 7); g.fill();
+    }
+    if (topping) drawCookieTopping(g, topping.kind, cx, cy, r, topping.color);
+  }
+
+  class CookieHelperMinigame extends ChoiceQuizMinigame {
+    constructor(done: MinigameDone) {
+      super(done, {
+        title: 'Cookie Helper!',
+        introLines: ['Mrs. Honey has warm cookies to decorate.', 'Arrows pick a topping · E adds it', 'Press E to start!'],
+        introSprite: 'honey',
+        footerSprite: 'starry',
+        resultTitle: 'Fresh from the oven!',
+        cardY: 395,
+        cardH: 170,
+        promptY: 74,
+        progressY: 132,
+        promptColor: '#7a4a34',
+        progressColor: '#b85c8a',
+      });
+    }
+    buildQuestion() {
+      const opts = pickN(BAKERY_TOPPINGS, 3);
+      const answer = opts[0];
+      const shuffled = pickN(opts, 3);
+      return { prompt: 'Add ' + answer.name + '!', opts: shuffled, ans: shuffled.indexOf(answer), topping: answer };
+    }
+    drawBackground(g: Ctx, W: number, H: number) {
+      g.fillStyle = '#f8e7c8'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#e4b384'; g.fillRect(0, H - 155, W, 155);
+      g.fillStyle = '#b9774d'; g.fillRect(0, 270, W, 52);
+      g.fillStyle = '#fff0d2'; rr(g, 120, 92, 180, 120, 14); g.fill();
+      g.fillStyle = '#b9774d'; rr(g, 142, 122, 136, 56, 10); g.fill();
+      g.fillStyle = '#fff6e8'; rr(g, W - 305, 88, 190, 112, 14); g.fill();
+      g.fillStyle = '#d69a5b'; rr(g, W - 275, 120, 130, 24, 10); g.fill();
+      g.fillStyle = '#c48455'; rr(g, W - 255, 152, 90, 20, 10); g.fill();
+      sprite(g, 'honey', 'down', Math.floor(this.t * 2) % 2 ? 1 : 0, 92, 316, 3.5);
+    }
+    drawPlayExtras(g: Ctx, W: number) {
+      if (!this.q) return;
+      g.fillStyle = '#b9774d'; rr(g, W / 2 - 150, 172, 300, 118, 18); g.fill();
+      g.fillStyle = '#e0c4a2'; rr(g, W / 2 - 125, 188, 250, 86, 16); g.fill();
+      drawCookie(g, W / 2, 231, 50, this.q.topping);
+      label(g, 'decorate this cookie', W / 2, 308, 18, '#7a4a34');
+    }
+    drawOption(g: Ctx, opt: BakeryTopping, cx: number, cy: number) {
+      drawCookie(g, cx, cy - 20, 42, opt);
+      label(g, opt.name, cx, cy + 62, 17, '#5a4a6a');
+    }
+    resultSub() { return this.score + ' of 5 cookies decorated!'; }
+  }
+
   /* ================= BEACH : Shell Splash ================= */
   class ShellsMinigame extends BaseMinigame {
     total: number;
@@ -875,7 +1152,7 @@ export const Minigames = (() => {
     total: number;
     score: number;
     popped: number;
-    cur: { dir: string; t: number; age: number } | null;
+    cur: { dir: string; age: number } | null;
     wait: number;
     flashT: number;
     flashDir: string | null;
@@ -912,14 +1189,9 @@ export const Minigames = (() => {
           return;
         }
         this.wait -= dt;
-        if (this.wait <= 0) this.cur = { dir: DIRS[Math.floor(Math.random() * 4)], t: Math.max(0.9, 1.6 - this.popped * 0.06), age: 0 };
+        if (this.wait <= 0) this.cur = { dir: DIRS[Math.floor(Math.random() * 4)], age: 0 };
       } else {
-        this.cur.t -= dt; this.cur.age += dt;
-        if (this.cur.t <= 0) {
-          this.popped++;
-          this.cur = null; this.wait = 0.6;
-          AudioSys.sfx('pop');
-        }
+        this.cur.age += dt;
       }
     }
     draw(g: Ctx) {
@@ -931,7 +1203,7 @@ export const Minigames = (() => {
         panel(g, W / 2 - 320, 240, 640, 190, '#fff8ee');
         label(g, 'Veggie Round-up!', W / 2, 295, 36, '#6a8a3a');
         label(g, 'Carrots pop out of four dirt mounds.', W / 2, 345, 21, '#5a4a6a');
-        label(g, 'Press that arrow before they wiggle away. Press E!', W / 2, 380, 21, '#b85c8a');
+        label(g, 'Press that arrow to pick each carrot. Press E!', W / 2, 380, 21, '#b85c8a');
         sprite(g, 'fern', 'down', 0, W / 2, 620, 5);
         return;
       }
@@ -955,8 +1227,9 @@ export const Minigames = (() => {
           g.beginPath(); g.ellipse(x, y + 26, 80, 34, 0, 0, 7); g.fill();
         }
         if (this.cur && this.cur.dir === d) {
-          const up = Math.min(1, this.cur.age * 6) * (0.85 + Math.sin(this.cur.age * 10) * 0.15);
-          g.drawImage(ic, x - 32, y + 16 - 76 * up, 64, 64);
+          const up = Math.min(1, this.cur.age * 6);
+          const wiggle = up >= 1 ? Math.sin(this.cur.age * 10) * 3 : 0;
+          g.drawImage(ic, x - 32 + wiggle, y + 16 - 76 * up, 64, 64);
         }
         label(g, ARROW_GLYPHS[d], x, y + 62, 30, '#5a4a3a');
       }
@@ -1195,15 +1468,18 @@ export const Minigames = (() => {
   }
 
   /* ================= CITY : Hopscotch Hero ================= */
+  const HOPSCOTCH_LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
   class HopscotchMinigame extends BaseMinigame {
     total: number;
     step: number;
     score: number;
-    cur: { dir: string; t: number; age: number } | null;
+    cur: { letter: string; age: number } | null;
     flash: number;
     goodFlash: boolean;
     constructor(done: MinigameDone) {
       super(done);
+      this.inputMode = 'letters';
       this.total = 10;
       this.step = 0;
       this.score = 0;
@@ -1217,7 +1493,7 @@ export const Minigames = (() => {
       AudioSys.sfx('confirm');
     }
     nextHop() {
-      this.cur = { dir: DIRS[Math.floor(Math.random() * DIRS.length)], t: 1.5, age: 0 };
+      this.cur = { letter: HOPSCOTCH_LETTERS[Math.floor(Math.random() * HOPSCOTCH_LETTERS.length)], age: 0 };
     }
     finishHop(good: boolean) {
       if (good) this.score++;
@@ -1232,15 +1508,13 @@ export const Minigames = (() => {
       }
     }
     handleInput(act: string) {
-      if (this.phase !== 'play' || !DIRS.includes(act) || !this.cur) return;
-      this.finishHop(act === this.cur.dir);
+      if (this.phase !== 'play' || !/^[a-z]$/.test(act) || !this.cur) return;
+      this.finishHop(act === this.cur.letter);
     }
     updatePlay(dt: number) {
       this.flash = Math.max(0, this.flash - dt);
       if (this.phase !== 'play' || !this.cur) return;
       this.cur.age += dt;
-      this.cur.t -= dt;
-      if (this.cur.t <= 0) this.finishHop(false);
     }
     draw(g: Ctx) {
       const W = g.canvas.width, H = g.canvas.height;
@@ -1249,8 +1523,8 @@ export const Minigames = (() => {
       if (this.phase === 'intro') {
         panel(g, W / 2 - 320, 225, 640, 190, '#fff8ee');
         label(g, 'Hopscotch Hero!', W / 2, 280, 36, '#9a7ad0');
-        label(g, 'Hop to the arrow on each chalk square.', W / 2, 330, 21, '#5a4a6a');
-        label(g, 'Press the matching arrow. Press E!', W / 2, 365, 21, '#b85c8a');
+        label(g, 'Hop to the letter on each chalk square.', W / 2, 330, 21, '#5a4a6a');
+        label(g, 'Press the matching alphabet key. Press E!', W / 2, 365, 21, '#b85c8a');
         return;
       }
       if (this.phase === 'result') {
@@ -1272,45 +1546,99 @@ export const Minigames = (() => {
           g.fillStyle = active ? '#fff8ee' : (done ? 'rgba(154,219,122,.65)' : colors[i % colors.length]);
           g.fill();
           g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
+          if (active && this.cur) label(g, this.cur.letter.toUpperCase(), x, y + 22, 25, '#5a4a6a');
         }
       }
       const px = sx, py = top + this.step * 45 + 42;
       sprite(g, 'starry', 'down', Math.floor(this.t * 6) % 2 ? 1 : 2, px, py + Math.sin(this.t * 12) * 6, 3.5);
       if (this.cur) {
         const pulse = 1 + Math.sin(this.cur.age * 10) * 0.08;
-        label(g, ARROW_GLYPHS[this.cur.dir], sx, 120, 66 * pulse, '#5a4a6a');
-        g.fillStyle = 'rgba(255,255,255,.72)'; rr(g, sx - 155, 95, 310, 12, 6); g.fill();
-        g.fillStyle = '#9a7ad0'; rr(g, sx - 155, 95, 310 * Math.max(0, this.cur.t / 1.5), 12, 6); g.fill();
+        label(g, this.cur.letter.toUpperCase(), sx, 120, 68 * pulse, '#5a4a6a');
       }
       if (this.flash > 0) label(g, this.goodFlash ? 'Hop!' : 'Wobble!', W / 2, H - 82, 28, this.goodFlash ? '#6ab85f' : '#d85a5a');
     }
   }
 
   const registry: Record<string, MinigameCtor> = {};
+  const metas: Record<string, MinigameMeta> = {};
   const api: Record<string, any> = {
     create(name: string, done: MinigameDone): Minigame {
       const Ctor = registry[name];
       if (!Ctor) throw new Error('Unknown minigame: ' + name);
       return new Ctor(done);
     },
-    register(name: string, Ctor: MinigameCtor) {
+    /** Register a game and its metadata. This is the single integration
+        point: launchers get the economics from meta(), and dev/smoke.js
+        automatically plays every registered game using meta().keys. */
+    register(name: string, Ctor: MinigameCtor, meta: MinigameMetaInput) {
       registry[name] = Ctor;
+      metas[name] = { energy: 12, minutes: 40, minEnergy: 15, ...meta };
       api[name] = (done: MinigameDone) => new Ctor(done);
     },
+    meta(name: string): MinigameMeta | undefined { return metas[name]; },
     types() { return Object.keys(registry); },
     BaseMinigame,
     ChoiceQuizMinigame,
   };
-  api.register('school', SchoolMinigame);
-  api.register('math', MathMinigame);
-  api.register('swim', SwimMinigame);
-  api.register('ballet', BalletMinigame);
-  api.register('art', ArtMinigame);
-  api.register('shells', ShellsMinigame);
-  api.register('veggies', VeggiesMinigame);
-  api.register('bubblepop', BubblePopMinigame);
-  api.register('balloonbop', BalloonBopMinigame);
-  api.register('hopscotch', HopscotchMinigame);
+
+  // classes (launched on a schedule via CLASS_INFO in main.ts — their
+  // energy/minutes here only apply if something launches them as fun games)
+  api.register('school', SchoolMinigame, {
+    label: 'Letter Time', keys: ['left', 'right', 'action'],
+    description: "Ms. Bloom's letter, shape, and color questions.",
+  });
+  api.register('swim', SwimMinigame, {
+    label: 'Splash Dash', keys: ['left', 'right'],
+    description: 'Paddle ← → one after the other and out-swim the pace duck.',
+  });
+  api.register('ballet', BalletMinigame, {
+    label: 'Waltz Steps', keys: ['up', 'down', 'left', 'right'],
+    description: "Watch Madame Plié's routine, then repeat it with the arrows.",
+  });
+  api.register('art', ArtMinigame, {
+    label: 'Painting Time', keys: ['left', 'right', 'action'],
+    description: "Mr. Doodle's color-mixing questions.",
+  });
+
+  // just-for-fun games (launched by NPCs, freeGames lists, or tiles)
+  api.register('math', MathMinigame, {
+    label: 'Number Time', energy: 0, minutes: 20, minEnergy: 0,
+    keys: ['left', 'right', 'action'],
+    description: 'Counting, adding, and taking away with little fruit rows.',
+  });
+  api.register('stampstudio', StampStudioMinigame, {
+    label: 'Stamp Studio', energy: 8, minutes: 25, minEnergy: 10,
+    keys: ['up', 'down', 'left', 'right', 'action'],
+    description: 'Match Mr. Doodle\'s requested colored shape stamp.',
+  });
+  api.register('cookiehelper', CookieHelperMinigame, {
+    label: 'Cookie Helper', energy: 6, minutes: 20, minEnergy: 5,
+    keys: ['left', 'right', 'action'],
+    description: 'Decorate warm bakery cookies with Mrs. Honey by matching toppings.',
+  });
+  api.register('shells', ShellsMinigame, {
+    label: 'Shell Splash', keys: ['left', 'right'],
+    description: 'Catch the falling shells in a bucket, three lanes.',
+  });
+  api.register('veggies', VeggiesMinigame, {
+    label: 'Veggie Round-up', keys: ['up', 'down', 'left', 'right'],
+    description: 'Pick each popped carrot with the matching arrow; carrots stay up until picked.',
+  });
+  api.register('bubblepop', BubblePopMinigame, {
+    label: 'Bubble Pop', energy: 8, minutes: 25, minEnergy: 10,
+    keys: ['left', 'right', 'action'],
+    description: 'Slide under rising bubbles and pop them with E.',
+  });
+  api.register('balloonbop', BalloonBopMinigame, {
+    label: 'Balloon Bop', energy: 8, minutes: 25, minEnergy: 10,
+    keys: ['up', 'down', 'left', 'right'],
+    description: 'Each balloon shows an arrow — press it before it floats off.',
+  });
+  api.register('hopscotch', HopscotchMinigame, {
+    label: 'Hopscotch Hero', energy: 8, minutes: 25, minEnergy: 10,
+    keys: HOPSCOTCH_LETTERS,
+    description: 'Hop the chalk course by matching each alphabet letter at your own pace.',
+  });
 
   return api;
 })();
