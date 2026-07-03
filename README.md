@@ -206,7 +206,10 @@ Adding a minigame? Read `MINIGAMES.md` — games are self-contained classes
 registered with their metadata in one place, and the validators pick new
 ones up automatically.
 
-Working with Claude Code? Project skills in `.claude/skills/` capture the
-recipes for the common jobs — `add-minigame`, `add-area`, `add-character`,
-`add-activity`, and `add-music` — including the cross-file registries and
-validator constraints each one has to satisfy.
+Working with Claude Code? Project skills in `.claude/skills/` are the
+maintainer's knowledge base — start with `architecture` (orientation),
+then `debugging` and `verifying-changes` (how to operate), the extension
+recipes (`add-minigame`, `add-area`, `add-character`, `add-activity`,
+`add-music`, `pixel-art`), and `design-principles` (the quality bar every
+new feature must meet). Every claim in them is verified against this
+codebase; if you change a convention, update the matching skill.
