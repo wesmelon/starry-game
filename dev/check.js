@@ -115,11 +115,11 @@ for (const a of Entities.ANIMALS) {
 // the bike parks on walkable ground
 {
   const mainSrcB = fs.readFileSync(path.join(root, 'src/main.ts'), 'utf8');
-  const m = mainSrcB.match(/BIKE_HOME = \{ x: ([\d.]+), y: ([\d.]+) \}/);
-  check(!!m, 'found BIKE_HOME in main.js');
-  if (m) check(!Maps.isSolid('town', Math.floor(+m[1]), Math.floor(+m[2])) &&
-               !Maps.isWater('town', Math.floor(+m[1]), Math.floor(+m[2])),
-    `bike home (${m[1]},${m[2]}) is dry walkable land`);
+  const m = mainSrcB.match(/BIKE_HOME = \{ map: '([^']+)', x: ([\d.]+), y: ([\d.]+) \}/);
+  check(!!m, 'found BIKE_HOME in main.ts');
+  if (m) check(!Maps.isSolid(m[1], Math.floor(+m[2]), Math.floor(+m[3])) &&
+               !Maps.isWater(m[1], Math.floor(+m[2]), Math.floor(+m[3])),
+    `bike home (${m[1]} ${m[2]},${m[3]}) is dry walkable land`);
 }
 
 // ---- sprites ----

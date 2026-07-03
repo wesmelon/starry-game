@@ -152,8 +152,9 @@ Beyond the classes, Starview Meadow is full of toddler-sized fun:
 ## Around town
 
 - **Ride the bike** — Starry's pink bike is parked beside the house. Press E
-  next to it to hop on and zoom around town (it politely waits outside
-  buildings, and Mom parks it back home each morning).
+  next to it to hop on and zoom around town. It can ride the bus between
+  outdoor areas, waits outside buildings, and Mom parks it back home each
+  morning.
 - **Go swimming** — once Starry has taken a swim class, she can paddle in the
   town lake (and the swim center pool). Before that, the water says no.
 - **Feed the critters** — Mochi the cat, Biscuit the puppy, Clover the bunny,

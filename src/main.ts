@@ -93,8 +93,8 @@ export const Game = (() => {
   // ---------- player & npcs ----------
   const player: { map: string; x: number; y: number; dir: Dir; moving: boolean; animT: number; swimming: boolean; riding: boolean } =
     { map: 'home', x: 4.5, y: 6.6, dir: 'down', moving: false, animT: 0, swimming: false, riding: false };
-  const BIKE_HOME = { x: 12.5, y: 6.8 };
-  const bike = { x: BIKE_HOME.x, y: BIKE_HOME.y };   // lives on the town map
+  const BIKE_HOME = { map: 'town', x: 12.5, y: 6.8 };
+  const bike = { map: BIKE_HOME.map, x: BIKE_HOME.x, y: BIKE_HOME.y };
   let waterHintT = 0;
   const npcState: Record<string, NpcState> = {};
   // critters drift gently around their home spot on the town map
@@ -332,7 +332,7 @@ export const Game = (() => {
       stats = { stars: 0, lines: [] };
       player.map = 'home'; player.x = 2.5; player.y = 2.7; player.dir = 'right';
       player.swimming = false; player.riding = false;
-      bike.x = BIKE_HOME.x; bike.y = BIKE_HOME.y;   // Mom parks it back by the door
+      bike.map = BIKE_HOME.map; bike.x = BIKE_HOME.x; bike.y = BIKE_HOME.y;   // Mom parks it back by the door
       placeNPCs();
       if (G.day >= 8) award('week');
       state = 'play';
@@ -547,11 +547,12 @@ export const Game = (() => {
     return best;
   }
   function bikeNear() {
-    return player.map === 'town' && !player.swimming &&
+    return bike.map === player.map && !player.swimming &&
       Math.hypot(bike.x - player.x, bike.y - player.y) < 1.4;
   }
   function dismountHere() {
     player.riding = false;
+    bike.map = player.map;
     bike.x = player.x; bike.y = player.y;
     AudioSys.sfx('bell');
   }
@@ -910,11 +911,12 @@ export const Game = (() => {
       const tx = Math.floor(player.x), ty = Math.floor(player.y - 0.1);
       const w = Maps.warpAt(player.map, tx, ty);
       if (w) {
-        if (player.riding) {                 // bikes wait outside, next to the door
+        const carryBike = player.riding && !!Maps.get(player.map).outdoor && !!Maps.get(w.map).outdoor;
+        if (player.riding && !carryBike) {   // bikes wait outside, next to the door
           dismountHere();
           bike.x = player.x - 1; bike.y = player.y + 1;
         }
-        doWarp(w);
+        doWarp(w, carryBike);
       }
     } else player.animT = 0;
     // in or out of the water?
@@ -925,13 +927,18 @@ export const Game = (() => {
       if (onWater && player.map === 'town') award('paddler');
     }
   }
-  function doWarp(w: Warp) {
+  function doWarp(w: Warp, carryBike = false) {
     held.clear();
     fadeTo(() => {
       player.map = w.map;
       player.x = w.x + 0.5;
       player.y = w.y + 0.85;
       player.dir = w.dir;
+      if (carryBike) {
+        bike.map = player.map;
+        bike.x = player.x;
+        bike.y = player.y;
+      }
       const trip = ({ city: 'citytrip', beach: 'beachtrip', farm: 'farmtrip' } as Record<string, string>)[w.map];
       if (trip) award(trip);
       setLocation(Maps.get(w.map).label);
@@ -1103,11 +1110,11 @@ export const Game = (() => {
           ctx.drawImage(c, Math.floor(d.x * T - 15 - cam.x), Math.floor(d.y * T - 18 - cam.y + bob), 30, 21);
         }});
       }
-      if (!player.riding) {
-        const c = SpriteLib.bike('left');
-        ents.push({ y: bike.y, draw: () =>
-          ctx.drawImage(c, Math.floor(bike.x * T - 24 - cam.x), Math.floor(bike.y * T - 33 - cam.y), 48, 33) });
-      }
+    }
+    if (!player.riding && bike.map === player.map) {
+      const c = SpriteLib.bike('left');
+      ents.push({ y: bike.y, draw: () =>
+        ctx.drawImage(c, Math.floor(bike.x * T - 24 - cam.x), Math.floor(bike.y * T - 33 - cam.y), 48, 33) });
     }
     ents.sort((a, b) => a.y - b.y);
     for (const e of ents) e.draw();
@@ -1274,7 +1281,7 @@ export const Game = (() => {
     stats = { stars: 0, lines: [] };
     player.map = 'home'; player.x = 4.5; player.y = 6.6; player.dir = 'down';
     player.swimming = false; player.riding = false;
-    bike.x = BIKE_HOME.x; bike.y = BIKE_HOME.y;
+    bike.map = BIKE_HOME.map; bike.x = BIKE_HOME.x; bike.y = BIKE_HOME.y;
     placeNPCs();
     fadeTo(() => {
       state = 'play';
@@ -1294,7 +1301,7 @@ export const Game = (() => {
     stats = { stars: 0, lines: [] };
     player.map = 'home'; player.x = 2.5; player.y = 2.7; player.dir = 'right';
     player.swimming = false; player.riding = false;
-    bike.x = BIKE_HOME.x; bike.y = BIKE_HOME.y;
+    bike.map = BIKE_HOME.map; bike.x = BIKE_HOME.x; bike.y = BIKE_HOME.y;
     placeNPCs();
     fadeTo(() => {
       state = 'play';
