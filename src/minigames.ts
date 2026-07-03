@@ -1060,11 +1060,11 @@ export const Minigames = (() => {
       name: 'Star Ramp',
       rows: [
         '#############',
-        '#S....*....G#',
-        '#.###.###.#.#',
-        '#.....#.....#',
-        '#.###...###.#',
-        '#.....*.....#',
+        '#...........#',
+        '#...........#',
+        '#...........#',
+        '#...........#',
+        '#S...*....G.#',
         '#############',
       ],
     },
@@ -1072,11 +1072,11 @@ export const Minigames = (() => {
       name: 'Key Garden',
       rows: [
         '#############',
-        '#S...#.....G#',
-        '#.##.#.###D##',
-        '#....#...#..#',
-        '#.######.#*.#',
-        '#......K....#',
+        '#...........#',
+        '#...........#',
+        '#...........#',
+        '#...........#',
+        '#S...K.D.*G.#',
         '#############',
       ],
     },
@@ -1084,24 +1084,26 @@ export const Minigames = (() => {
       name: 'Tiny Switchback',
       rows: [
         '#############',
-        '#S..*......G#',
-        '###.#####D###',
-        '#...#.......#',
-        '#.###.#####.#',
-        '#.....K..*..#',
+        '#...........#',
+        '#...........#',
+        '#...........#',
+        '#...........#',
+        '#S..*..K.DG.#',
         '#############',
       ],
     },
   ];
   const ROLL_CUSTOM_START = [
     '#############',
-    '#S....*....G#',
-    '#...........#',
-    '#.....#.....#',
     '#...........#',
     '#...........#',
+    '#...........#',
+    '#...........#',
+    '#S....*...G.#',
     '#############',
   ];
+  const ROLL_GRAVITY = 9.4;
+  const ROLL_MAX_SPEED = 7.0;
   const ROLL_PALETTE = ['.', '#', '*', 'K', 'D', 'G', 'S'];
   const ROLL_NAMES: Record<string, string> = {
     '.': 'path', '#': 'wall', '*': 'star', K: 'key', D: 'gate', G: 'goal', S: 'start',
@@ -1281,14 +1283,16 @@ export const Minigames = (() => {
         else { this.phase = 'intro'; AudioSys.sfx('blip'); }
         return;
       }
-      const push = 2.3;
+      const push = 2.25;
       if (act === 'left') this.vx -= push;
       else if (act === 'right') this.vx += push;
-      else if (act === 'up') this.vy -= push;
-      else if (act === 'down') this.vy += push;
+      else if (act === 'up') {
+        if (this.isGrounded()) { this.vy = -5.2; AudioSys.sfx('pop'); }
+        return;
+      }
+      else if (act === 'down') this.vy += 3.2;
       else return;
-      const sp = Math.hypot(this.vx, this.vy);
-      if (sp > 5.4) { this.vx = this.vx / sp * 5.4; this.vy = this.vy / sp * 5.4; }
+      this.limitSpeed();
       AudioSys.sfx('blip');
     }
     updatePlay(dt: number) {
@@ -1298,9 +1302,10 @@ export const Minigames = (() => {
       }
       this.levelT += dt;
       this.msgT = Math.max(0, this.msgT - dt);
-      const drag = Math.pow(0.72, dt * 5);
+      this.vy += ROLL_GRAVITY * dt;
+      this.limitSpeed();
+      const drag = Math.pow(0.75, dt * 5);
       this.vx *= drag;
-      this.vy *= drag;
       const sub = Math.max(1, Math.ceil(dt / 0.018));
       const step = dt / sub;
       for (let i = 0; i < sub; i++) this.stepBall(step);
@@ -1319,7 +1324,14 @@ export const Minigames = (() => {
       else this.vx *= -0.22;
       const ny = this.ballY + this.vy * dt;
       if (!this.collides(this.ballX, ny)) this.ballY = ny;
-      else this.vy *= -0.22;
+      else this.vy = this.vy > 0 ? 0 : this.vy * -0.22;
+    }
+    limitSpeed() {
+      const sp = Math.hypot(this.vx, this.vy);
+      if (sp > ROLL_MAX_SPEED) { this.vx = this.vx / sp * ROLL_MAX_SPEED; this.vy = this.vy / sp * ROLL_MAX_SPEED; }
+    }
+    isGrounded() {
+      return this.collides(this.ballX, this.ballY + 0.06);
     }
     collides(x: number, y: number) {
       const r = 0.28;
@@ -1401,7 +1413,7 @@ export const Minigames = (() => {
     drawMenu(g: Ctx, W: number, H: number) {
       panel(g, W / 2 - 365, 195, 730, 340, '#fff8ee');
       label(g, 'Roller Lab', W / 2, 250, 42, '#b85c8a');
-      label(g, 'Roll the marble through tiny logic mazes.', W / 2, 302, 22, '#5a4a6a');
+      label(g, 'Gravity tugs the marble through tiny logic mazes.', W / 2, 302, 22, '#5a4a6a');
       const cards = [
         ['Puzzle Trail', 'Three gentle marble mazes'],
         ['Map Maker', 'Build a maze and test it'],
@@ -1421,10 +1433,10 @@ export const Minigames = (() => {
     drawPlay(g: Ctx, W: number, H: number) {
       const title = this.mode === 'trail' ? ROLL_LEVELS[this.level].name : 'Testing your map';
       label(g, title, W / 2, 62, 32, '#7a4a9a');
-      label(g, 'Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
+      label(g, 'Gravity pulls down   ·   Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
       this.drawGrid(g, this.grid, W / 2, 176, true);
       if (this.msgT > 0) label(g, this.msg, W / 2, H - 78, 24, '#5a4a6a');
-      label(g, 'Tap arrows to roll · E slows the marble', W / 2, H - 38, 18, '#7a6a8a');
+      label(g, '← → roll · ↑ hops · ↓ drops · E slows', W / 2, H - 38, 18, '#7a6a8a');
     }
     drawEditor(g: Ctx, W: number, H: number) {
       label(g, 'Map Maker', W / 2, 62, 34, '#7a4a9a');
@@ -2057,7 +2069,7 @@ export const Minigames = (() => {
   api.register('rollerlab', RollerLabMinigame, {
     label: 'Roller Lab', energy: 10, minutes: 35, minEnergy: 10,
     keys: ['left', 'right', 'up', 'down', 'action'],
-    description: 'Roll a marble through logic mazes or build and test a tiny custom map.',
+    description: 'Roll a gravity-pulled marble through logic mazes or build and test a tiny custom map.',
   });
   api.register('shells', ShellsMinigame, {
     label: 'Shell Splash', keys: ['left', 'right'],
