@@ -23,11 +23,16 @@ this is a kind game.*
   and advance; nothing waits forever hoping the player figures it out.
 - **Helpers genuinely help.** If assistance appears, it must do what it
   says. The pattern: Roller Lab's park helper (grep `park helper` in
-  `src/minigames/rollerlab.ts`) rolls the marble to the next maze after 70s —
+  `src/minigames/rollerlab.ts`) rolls the marble to the next maze after 45s —
   it does not end the game or fake a reward.
 - **Every state has an exit.** The player must always be able to leave —
   a menu Esc, a timeout, or a completion path. Audit each phase of a new
   feature for "how does a button-mashing 3-year-old get out of here?"
+  Roller Lab's Esc-during-play now opens a pause menu (resume / restart
+  the current floor or test / leave) instead of silently discarding
+  progress or trapping the player in its Map Maker edit↔test loop — a
+  reusable pattern for any minigame with a stuck-state risk (pushable
+  boxes, player-authored content, multi-step state).
 
 ## Interaction rules
 

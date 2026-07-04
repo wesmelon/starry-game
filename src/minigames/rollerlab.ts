@@ -11,7 +11,7 @@ const ROLL_LEVELS: RollerLevel[] = [
       '#S..*......B..#',
       '######...######',
       '#.............#',
-      '#.....*..^....#',
+      '#.....*^......#',
       '#..#########..#',
       '#...........G.#',
       '###############',
@@ -35,7 +35,7 @@ const ROLL_LEVELS: RollerLevel[] = [
     rows: [
       '###############',
       '#S..........*.#',
-      '#####..########',
+      '#####...#######',
       '#.............#',
       '#..*..^..K....#',
       '#..########..D#',
@@ -51,7 +51,7 @@ const ROLL_LEVELS: RollerLevel[] = [
       '#######..######',
       '#.......*..B..#',
       '#..#######....#',
-      '#...K..^..D...#',
+      '#.^.K.....D...#',
       '#..#########G.#',
       '###############',
     ],
@@ -60,12 +60,12 @@ const ROLL_LEVELS: RollerLevel[] = [
     name: 'Star Basement',
     rows: [
       '###############',
-      '#S..*.........#',
+      '#..S*.........#',
       '#..######..####',
-      '#.............#',
+      '#.^...........#',
       '####..#########',
-      '#...K..B..*..G#',
-      '#..#########D##',
+      '#...K....*..DG#',
+      '#..############',
       '###############',
     ],
   },
@@ -75,9 +75,9 @@ const ROLL_LEVELS: RollerLevel[] = [
       '###############',
       '#S....*.......#',
       '########..#####',
-      '#......B.....K#',
+      '#......B....K.#',
       '#..#########..#',
-      '#..^..*...D...#',
+      '#.^...*...D...#',
       '#..#########G.#',
       '###############',
     ],
@@ -96,6 +96,10 @@ const ROLL_CUSTOM_START = [
 const ROLL_GRAVITY = 9.4;
 const ROLL_MAX_SPEED = 7.0;
 const ROLL_DRIVE_SPEED = 4.8;
+const ROLL_DRIVE_TIME = 0.34;
+const ROLL_HOP = -5.6;
+// pads must reliably clear a full floor gap (~3 tiles): v²/2g ≈ 3.3
+const ROLL_BOUNCE = -7.9;
 const ROLL_BALL_R = 0.38;
 const ROLL_PALETTE = ['.', '#', '*', 'K', 'D', 'B', '^', 'G', 'S'];
 const ROLL_NAMES: Record<string, string> = {
@@ -129,6 +133,7 @@ export class RollerLabMinigame extends BaseMinigame {
   rollT: number;
   spin: number;
   bounceT: number;
+  pauseSel: number;
   constructor(done: MinigameDone) {
     super(done);
     this.menuSel = 0;
@@ -157,6 +162,7 @@ export class RollerLabMinigame extends BaseMinigame {
     this.rollT = 0;
     this.spin = 0;
     this.bounceT = 0;
+    this.pauseSel = 0;
   }
   key(act: string) {
     if (this.phase === 'intro') {
@@ -179,7 +185,40 @@ export class RollerLabMinigame extends BaseMinigame {
       else if (act === 'back') this.startCustomTest();
       return;
     }
+    if (this.phase === 'pause') {
+      const opts = this.pauseOptions();
+      if (act === 'up') { this.pauseSel = (this.pauseSel - 1 + opts.length) % opts.length; AudioSys.sfx('blip'); }
+      else if (act === 'down') { this.pauseSel = (this.pauseSel + 1) % opts.length; AudioSys.sfx('blip'); }
+      else if (act === 'action') this.choosePause();
+      else if (act === 'back') { this.phase = 'play'; AudioSys.sfx('blip'); }   // Esc again = quick resume
+      return;
+    }
     super.key(act);
+  }
+  // stuck on a floor (a pushed box sealed the only route, a drop left no
+  // way back up)? Esc always opens this — resume, restart fresh, or leave.
+  openPause() {
+    this.phase = 'pause';
+    this.pauseSel = 0;
+    AudioSys.sfx('blip');
+  }
+  pauseOptions(): string[] {
+    return this.mode === 'custom'
+      ? ['Keep rolling', 'Restart this test', 'Back to Map Maker', 'Leave Roller Lab']
+      : ['Keep rolling', 'Restart this floor', 'Leave Roller Lab'];
+  }
+  choosePause() {
+    const choice = this.pauseOptions()[this.pauseSel];
+    AudioSys.sfx('confirm');
+    if (choice === 'Keep rolling') this.phase = 'play';
+    else if (choice === 'Restart this floor') this.startLevel(ROLL_LEVELS[this.level].rows);
+    else if (choice === 'Restart this test') this.startCustomTest();
+    else if (choice === 'Back to Map Maker') this.phase = 'edit';
+    else if (choice === 'Leave Roller Lab') {
+      // matches the intro's own "leave" reward: credit for floors already
+      // solved, a gentle 1 star for an in-progress map test
+      this.complete(this.mode === 'custom' ? 1 : Math.max(1, Math.min(3, this.solved)), false);
+    }
   }
   start() {
     this.mode = 'trail';
@@ -282,17 +321,13 @@ export class RollerLabMinigame extends BaseMinigame {
   handleInput(act: string) {
     if (this.phase !== 'play') return;
     if (act === 'action') { this.vx *= 0.35; this.vy *= 0.35; AudioSys.sfx('blip'); return; }
-    if (act === 'back') {
-      if (this.mode === 'custom') { this.phase = 'edit'; AudioSys.sfx('blip'); }
-      else { this.phase = 'intro'; AudioSys.sfx('blip'); }
-      return;
-    }
+    if (act === 'back') { this.openPause(); return; }
     if (act === 'left' || act === 'right') {
       this.rollIntent = act === 'left' ? -1 : 1;
-      this.rollT = 0.34;
+      this.rollT = ROLL_DRIVE_TIME;
     }
     else if (act === 'up') {
-      if (this.isGrounded()) { this.vy = -5.6; AudioSys.sfx('pop'); }
+      if (this.isGrounded()) { this.vy = ROLL_HOP; AudioSys.sfx('pop'); }
       return;
     }
     else if (act === 'down') this.vy += 3.2;
@@ -313,9 +348,9 @@ export class RollerLabMinigame extends BaseMinigame {
       const target = this.rollIntent * ROLL_DRIVE_SPEED * (this.isGrounded() ? 1 : 0.75);
       this.vx += (target - this.vx) * Math.min(1, dt * 18);
       this.rollT = Math.max(0, this.rollT - dt);
-    } else if (this.isGrounded()) {
-      this.vx = 0;
     }
+    // when the drive window ends, the marble decelerates through drag
+    // below (not an instant stop) so it actually rolls to a halt
     this.limitSpeed();
     const drag = Math.pow(this.isGrounded() ? 0.35 : 0.78, dt * 5);
     this.vx *= drag;
@@ -324,7 +359,7 @@ export class RollerLabMinigame extends BaseMinigame {
     const step = dt / sub;
     for (let i = 0; i < sub; i++) this.stepBall(step);
     this.visitTile();
-    if (this.mode === 'trail' && this.levelT > 70 && !this.helperUsed) {
+    if (this.mode === 'trail' && this.levelT > 45 && !this.helperUsed) {
       this.helperUsed = true;
       this.helped++;
       AudioSys.sfx('sparkle');
@@ -374,7 +409,16 @@ export class RollerLabMinigame extends BaseMinigame {
     if (sp > ROLL_MAX_SPEED) { this.vx = this.vx / sp * ROLL_MAX_SPEED; this.vy = this.vy / sp * ROLL_MAX_SPEED; }
   }
   isGrounded() {
-    return this.collides(this.ballX, this.ballY + 0.06);
+    // only the row strictly below the ball's own footprint counts —
+    // touching a side wall must never register as standing on ground
+    // (that let a mashed ↑ climb straight up a wall)
+    const r = ROLL_BALL_R;
+    const below = Math.floor(this.ballY + r + 0.02);
+    if (below <= Math.floor(this.ballY)) return false;
+    for (let tx = Math.floor(this.ballX - r + 0.02); tx <= Math.floor(this.ballX + r - 0.02); tx++) {
+      if (this.solidAt(tx, below)) return true;
+    }
+    return false;
   }
   collides(x: number, y: number) {
     const r = ROLL_BALL_R;
@@ -408,7 +452,7 @@ export class RollerLabMinigame extends BaseMinigame {
       this.msgT = 1.5;
       AudioSys.sfx('sparkle');
     } else if (ch === '^' && this.bounceT <= 0) {
-      this.vy = -7.4;
+      this.vy = ROLL_BOUNCE;
       this.bounceT = 0.22;
       this.msg = 'Boing!';
       this.msgT = 0.9;
@@ -449,6 +493,7 @@ export class RollerLabMinigame extends BaseMinigame {
     }
     if (this.phase === 'edit') { this.drawEditor(g, W, H); return; }
     this.drawPlay(g, W, H);
+    if (this.phase === 'pause') this.drawPauseOverlay(g, W, H);
   }
   drawPark(g: Ctx, W: number, H: number) {
     g.fillStyle = '#d8f2ee'; g.fillRect(0, 0, W, H);
@@ -482,10 +527,25 @@ export class RollerLabMinigame extends BaseMinigame {
   drawPlay(g: Ctx, W: number, H: number) {
     const title = this.mode === 'trail' ? ROLL_LEVELS[this.level].name : 'Testing your map';
     label(g, title, W / 2, 62, 32, '#7a4a9a');
-    label(g, 'Floor ' + (this.level + 1) + '/' + ROLL_LEVELS.length + '   ·   Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
+    const progress = this.mode === 'trail' ? 'Floor ' + (this.level + 1) + '/' + ROLL_LEVELS.length + '   ·   ' : '';
+    label(g, progress + 'Stars ' + this.starsGot + '/' + this.starsTotal + (this.hasKey ? '   ·   key!' : ''), W / 2, 103, 20, '#b85c8a');
     this.drawGrid(g, this.grid, W / 2, 176, true);
     if (this.msgT > 0) label(g, this.msg, W / 2, H - 78, 24, '#5a4a6a');
-    label(g, '← → scoot · ↑ hops · ↓ drops · push boxes · bounce pads go boing', W / 2, H - 38, 18, '#7a6a8a');
+    label(g, '← → scoot · ↑ hop · ↓ fall fast · E brake · Esc pause', W / 2, H - 38, 18, '#7a6a8a');
+  }
+  drawPauseOverlay(g: Ctx, W: number, H: number) {
+    g.fillStyle = 'rgba(60,40,70,.45)'; g.fillRect(0, 0, W, H);
+    const opts = this.pauseOptions();
+    const rowH = 54, h = 90 + opts.length * rowH, y0 = H / 2 - h / 2;
+    panel(g, W / 2 - 220, y0, 440, h, '#fff8ee');
+    label(g, 'Take a breath', W / 2, y0 + 46, 28, '#b85c8a');
+    for (let i = 0; i < opts.length; i++) {
+      const y = y0 + 92 + i * rowH;
+      const sel = i === this.pauseSel;
+      if (sel) { rr(g, W / 2 - 190, y - 24, 380, 48, 14); g.fillStyle = 'rgba(255,184,79,.3)'; g.fill(); }
+      label(g, opts[i], W / 2, y, 22, sel ? '#7a4a9a' : '#5a4a6a');
+    }
+    label(g, '↑↓ choose · E picks · Esc resumes', W / 2, y0 + h - 18, 15, '#9a8ab8');
   }
   drawEditor(g: Ctx, W: number, H: number) {
     label(g, 'Map Maker', W / 2, 62, 34, '#7a4a9a');
