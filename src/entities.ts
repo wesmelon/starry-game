@@ -10,8 +10,8 @@ export const Entities = (() => {
   // where(): G is the live game state {day, hour, dow (0=Mon..6=Sun)}
   const NPCS: Npc[] = [
     {
-      id: 'mom', name: 'Mom', sprite: 'mom', radius: 1.2,
-      where: () => ({ map: 'home', x: 10, y: 5 }),
+      id: 'mom', name: 'Mom', sprite: 'mom', radius: 1.2, family: true,
+      where: (G) => (G.hour >= 18 && G.hour < 21.5) ? { map: 'home', x: 4, y: 4 } : { map: 'home', x: 10, y: 5 },
       talk: (G) => {
         if (G.hour < 9) {
           if (G.dow <= 4) return [`Good morning, sunshine! School starts at 9. ${G.dow === 1 || G.dow === 3 ? 'And swim class at 2!' : (G.dow === 0 || G.dow === 2 || G.dow === 4 ? 'And ballet at 2!' : '')}`,
@@ -23,6 +23,21 @@ export const Entities = (() => {
           ['Have fun out there! Mr. Scoop has strawberry cones today...'],
           ['I love you THIS much! *stretches arms*'],
           ['Did you make a new friend today? Tell me everything later!'],
+        ];
+        return lines[G.day % lines.length];
+      },
+    },
+    {
+      id: 'dad', name: 'Dad', sprite: 'dad', radius: 1, family: true,
+      where: (G) => (G.hour >= 18 && G.hour < 21.5) ? { map: 'home', x: 7, y: 4 } : { map: 'home', x: 11, y: 2 },
+      talk: (G) => {
+        if (G.hour >= 18 && G.hour < 21.5) return ['Table for two — three, counting you!', 'I saved you the comfiest chair, little star.'];
+        if (G.hour < 9) return ['Rise and shine, sleepyhead! The day is waiting.', 'Did you brush your teeth? Just checking — teeth-checking is my specialty.'];
+        if (G.hour >= 21.5) return ['Sleepy town is calling your name, kiddo.'];
+        const lines = [
+          ['Knock knock! ...Who\'s there? Just your silly old dad!'],
+          ['I fixed the squeaky door today. Very important dad work.'],
+          ['You are the BEST at everything, you know that?'],
         ];
         return lines[G.day % lines.length];
       },

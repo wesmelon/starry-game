@@ -185,6 +185,20 @@ export const Game = (() => {
     const c = CLASS_INFO[type];
     return c.days.includes(dow()) && hour() >= c.from && hour() < c.to && !G.done[type];
   }
+
+  // ---------- family dinner ----------
+  const DINNER_FROM = 18, DINNER_TO = 21.5;
+  function dinnerAvailable() {
+    return hour() >= DINNER_FROM && hour() < DINNER_TO && G.fun.dinner !== G.day;
+  }
+  function haveDinner(npc: Npc) {
+    AudioSys.sfx('munch');
+    funReward('dinner', 1, 35);
+    stats.lines.push('Dinner with Mom and Dad');
+    UI.say('', [npc.id === 'dad' ? 'Dad tells a very silly joke. Starry giggles with a mouth full of peas.'
+                                  : 'Mom passes the peas. Dad tells a very silly joke.',
+                'Yum yum, all gone! Full tummy, happy heart.']);
+  }
   function startClass(type: string) {
     state = 'minigame';
     mg = Minigames[type]((stars: number, perfect: boolean) => endClass(type, stars, perfect));
@@ -480,6 +494,14 @@ export const Game = (() => {
       cue('p1', 0, () => AudioSys.sfx('pop'));
       cue('p2', 0.55, () => AudioSys.sfx('pop'));
       if (p >= 1) player.y = a.oy;
+    } else if (a.type === 'bath') {
+      const ramp = Math.min(1, a.t / 0.4) * clamp01((a.dur - a.t) / 0.4);
+      player.x = a.tx + 0.5;
+      player.y = a.ty + 0.9 - Math.abs(Math.sin(a.t * 5)) * 0.22 * ramp;
+      player.dir = 'up';
+      cue('s1', 0, () => { AudioSys.sfx('splash'); bubbles(a.tx + 0.5, a.ty + 0.6); });
+      cue('s2', 1.0, () => { AudioSys.sfx('splash'); bubbles(a.tx + 0.5, a.ty + 0.6); });
+      if (p >= 1) { player.x = a.ox; player.y = a.oy; sparkles(a.ox, a.oy - 0.3); }
     }
     if (a.t >= a.dur) {
       anim = null;
@@ -599,6 +621,27 @@ export const Game = (() => {
       UI.choose('', hour() >= 18 ? 'All tucked in and sleepy?' : 'Snuggle into the cozy bed?', opts, v => {
         if (v === 'nap') goToSleep(true);
         else if (v === 'sleep') goToSleep(false);
+      });
+      return;
+    }
+    if (ch === '♨') {
+      // ties to the same evening window dinner opens (DINNER_FROM = 6pm),
+      // not to dinner actually being eaten -- nobody gets locked out of a
+      // bath for skipping a meal
+      if (hour() < DINNER_FROM) {
+        UI.say('', ['Maybe after dinner — a warm bubbly bath sounds perfect for later!']);
+        return;
+      }
+      UI.choose('', 'Bubbly bath time?', [
+        { label: 'Take a bath', value: 'bath' },
+        { label: 'Not now', value: null },
+      ], v => {
+        if (v === 'bath') {
+          startAnim('bath', f, 2.2, () => {
+            funReward('bath', 1, 20);
+            UI.say('Starry', ['Splish splash! All squeaky clean and sleepy.']);
+          });
+        }
       });
       return;
     }
@@ -804,6 +847,13 @@ export const Game = (() => {
     ns.pauseT = 2.5;
     ns.dir = player.x < ns.x - 0.3 ? 'left' : player.x > ns.x + 0.3 ? 'right' : (player.y < ns.y ? 'up' : 'down');
     if (npc.shop) return openShop(npc);
+    if (npc.family && dinnerAvailable()) {
+      UI.choose(npc.name, 'Dinner is ready! Want to come eat?', [
+        { label: 'Yes please!', value: 'eat' },
+        { label: 'Not yet', value: null },
+      ], v => { if (v === 'eat') haveDinner(npc); });
+      return;
+    }
     const freeGames = npc.freeGames || [];
     if (npc.teaches && classAvailable(npc.teaches)) {
       const c = CLASS_INFO[npc.teaches];
@@ -1018,6 +1068,7 @@ export const Game = (() => {
       stats.lines.push('Missed school today. Tomorrow for sure!');
       G.done.school = true;
     }
+    if (crossed(DINNER_FROM * 60) && G.fun.dinner !== G.day) UI.toast('Dinnertime! Head home to eat with Mom and Dad.', 'plate');
     if (player.map === 'town' && hour() >= 20) award('stargazer');
     if (G.tmin >= DAY_END) { UI.toast('*yaaawn* So sleepy...', 'moon'); goToSleep(false); }
   }
@@ -1126,7 +1177,7 @@ export const Game = (() => {
       const f = facingTile();
       const ch = Maps.tileAt(player.map, f.x, f.y);
       const here = Maps.tileAt(player.map, Math.floor(player.x), Math.floor(player.y - 0.15));
-      if (npc || animalNear() || bikeNear() || 'bvyQdgwhFYJ@I*&UVZ]9${'.includes(ch) ||
+      if (npc || animalNear() || bikeNear() || 'bvyQdgwhFYJ@I*&UVZ]9${♨'.includes(ch) ||
           '*&UZ$'.includes(here) || FLAVOR[ch]) {
         const bx = player.x * T - cam.x, by = (player.y - 1) * T - cam.y - 46;
         ctx.fillStyle = 'rgba(255,250,240,.92)';

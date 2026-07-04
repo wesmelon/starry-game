@@ -131,6 +131,7 @@ export const SpriteLib = (() => {
   const CHARDEFS: Record<string, CharDef> = {
     starry:   { kind:'kid',   pal:{ H:'#7a4a2e', D:'#ff9ec5', d:'#ee7fae', P:'#ff5f9e', B:'#e0567f' } },
     mom:      { kind:'adult', pal:{ H:'#5a3a22', P:'#5a3a22', D:'#8fbfe8', A:'#fff7ee', B:'#8a5a3a' } },
+    dad:      { kind:'adult', pal:{ H:'#4a2f1e', D:'#e0a458', B:'#5a4a3a' } },
     msbloom:  { kind:'adult', pal:{ H:'#b97a3f', P:'#b97a3f', D:'#a8d8a0', B:'#6a8a5a' } },
     coach:    { kind:'adult', pal:{ H:'#3a3530', D:'#ff8a5a', B:'#4a4a4a' } },
     madame:   { kind:'adult', pal:{ H:'#2a2530', P:'#2a2530', D:'#cdb0ee', B:'#9a7ad0' } },
@@ -412,6 +413,12 @@ export const SpriteLib = (() => {
     c: (g) => {
       px(g, 4, 2, 8, 3, '#dba368'); px(g, 4, 5, 8, 6, '#c98f54');
       px(g, 4, 11, 2, 4, '#a06a3c'); px(g, 10, 11, 2, 4, '#a06a3c');
+    },
+    '♨': (g) => {
+      px(g, 1, 6, 14, 8, '#fff5fa'); px(g, 1, 6, 14, 2, '#ffe0ec');
+      px(g, 2, 8, 12, 5, '#8fd4e8');
+      px(g, 4, 9, 2, 1, '#eaf7fb'); px(g, 9, 8, 2, 1, '#eaf7fb');
+      px(g, 2, 13, 2, 2, '#e0a45f'); px(g, 12, 13, 2, 2, '#e0a45f');
     },
     A: (g) => {
       px(g, 0, 0, 16, 16, '#8a6a4a'); px(g, 1, 1, 14, 12, '#3f7a5a');
@@ -760,6 +767,7 @@ export const SpriteLib = (() => {
     fly:   (g) => { px(g,7,4,2,9,'#6a5a4a'); px(g,3,3,4,4,'#cdb0ee'); px(g,9,3,4,4,'#ff9ec5'); px(g,3,8,4,4,'#ff9ec5'); px(g,9,8,4,4,'#cdb0ee'); },
     cream: (g) => { px(g,5,1,6,3,'#ff9ec5'); px(g,4,3,8,3,'#fff5fa'); px(g,5,7,6,7,'#e8b86a'); px(g,6,8,1,4,'#caa06a'); px(g,9,8,1,4,'#caa06a'); px(g,7,12,2,3,'#e8b86a'); },
     duck:  (g) => { px(g,4,3,5,4,'#fff8e4'); px(g,2,4,2,2,'#f2a444'); px(g,6,4,1,1,'#222'); px(g,4,7,9,5,'#fff8e4'); px(g,11,5,3,3,'#fff8e4'); },
+    plate: (g) => { px(g,1,3,14,10,'#fff5fa'); px(g,3,4,10,8,'#f0e0e8'); px(g,5,6,4,3,'#e8b86a'); px(g,4,10,2,2,'#62b84e'); px(g,10,10,2,2,'#e85a5a'); },
     moon:  (g) => { px(g,5,2,6,2,'#ffe89a'); px(g,3,4,4,2,'#ffe89a'); px(g,2,6,4,4,'#ffe89a'); px(g,3,10,4,2,'#ffe89a'); px(g,5,12,6,2,'#ffe89a'); px(g,11,11,2,2,'#ffe89a'); },
     note:  (g) => { px(g,9,2,2,9,'#7a5fae'); px(g,11,2,3,2,'#7a5fae'); px(g,6,9,5,4,'#9a7fce'); },
     sun:   (g) => { px(g,5,5,6,6,'#ffd95f'); px(g,7,1,2,3,'#ffb84f'); px(g,7,12,2,3,'#ffb84f'); px(g,1,7,3,2,'#ffb84f'); px(g,12,7,3,2,'#ffb84f'); },

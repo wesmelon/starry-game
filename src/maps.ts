@@ -228,7 +228,7 @@ export const Maps = (() => {
       '|y...........|',
       '|....rr......|',
       '|...cTTc.....|',
-      '|............|',
+      '|.........♨..|',
       '|............|',
       '|......x.....|',
       '||||||||||||||',
@@ -393,7 +393,7 @@ export const Maps = (() => {
 
   // water (w, W) is not solid — Starry can swim once she's had a class.
   // E is the walkable pool deck rim. Doors and bus stops stay walkable.
-  const SOLID = new Set('#f%12345<=o|bvmkyTcADtMQGhdgaunqzeFYJ@IlijNV/[])89?"{}('.split(''));
+  const SOLID = new Set('#f%12345<=o|bvmkyTcADtMQGhdgaunqzeFYJ@IlijNV/[])89?"{}(♨'.split(''));
   const WATER = new Set(['w', 'W']);
   const isWater = (name: string, x: number, y: number) => WATER.has(tileAt(name, x, y));
 

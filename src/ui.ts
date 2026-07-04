@@ -403,7 +403,7 @@ export const UI = (() => {
     // interiors
     '_': '#ecdcc6', '~': '#dbe8f1', '^': '#f1e1ed', '-': '#f4e4d2', '|': '#9a7a6a',
     'b': '#bfa3e6', 'v': '#bfa3e6', 'm': '#caa07a', 'k': '#cdd5db',
-    'r': '#ffb7d2', 'c': '#caa07a', 'T': '#caa07a', 'A': '#caa07a',
+    'r': '#ffb7d2', 'c': '#caa07a', 'T': '#caa07a', 'A': '#caa07a', '♨': '#8fd4e8',
     't': '#caa07a', 'D': '#caa07a', 'M': '#bfe6f2', 'Q': '#9a7a6a',
     'h': '#ffd479', 'G': '#ffd479', 'y': '#ff9a8f', 'x': '#ffcf4d',
     '}': '#c9935c',

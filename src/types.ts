@@ -35,6 +35,8 @@ export interface Npc {
   /** class type in CLASS_INFO this NPC teaches */
   teaches?: string;
   friend?: boolean;
+  /** offers the daily family dinner prompt during the evening window */
+  family?: boolean;
   story?: boolean;
   shop?: boolean;
   shopName?: string;

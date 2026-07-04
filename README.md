@@ -75,6 +75,12 @@ Starry falls asleep and a new day begins. Days follow a weekly schedule:
 - **Any day** — Sandy on the beach hosts **Shell Splash** (catch falling
   shells in a bucket) and Farmer Fern hosts **Veggie Round-up** (pick each
   carrot with the matching arrow). Each pays stars once a day.
+- **Dinnertime** — every evening from 6:00–9:30pm, head home and talk to
+  Mom or Dad to sit down for **family dinner**, a gold star and a good
+  energy refill.
+- **Bath time** — after dinner starts (6:00pm onward), press E at the
+  bathtub in Starry's room for a bubbly little splash, a gold star, and
+  some energy back before bed.
 
 Classes earn **stars** (the currency) and **skill XP**. Spend stars at
 Mr. Scoop's Sweets for energy treats, Ducky Snacks, and Critter Treats. Talk

@@ -94,9 +94,17 @@ const ROLL_CUSTOM_START = [
   '###############',
 ];
 const ROLL_GRAVITY = 9.4;
-const ROLL_MAX_SPEED = 7.0;
+// horizontal driving and vertical fall/bounce speed are capped
+// separately now -- a single combined-vector cap was silently chopping
+// every bounce pad's kick down to ROLL_MAX_VX regardless of how strong
+// it was set, since |ROLL_BOUNCE| alone already exceeded that cap
+const ROLL_MAX_VX = 7.0;
+const ROLL_MAX_VY = 9.2;
 const ROLL_DRIVE_SPEED = 4.8;
-const ROLL_DRIVE_TIME = 0.34;
+// one tap should carry the marble a good, smooth distance rather than
+// needing a fresh tap every tile -- key repeat is off in minigames, so
+// this window (plus the gentler drag above) is the whole feel of "roll"
+const ROLL_DRIVE_TIME = 0.55;
 const ROLL_HOP = -5.6;
 // pads must reliably clear a full floor gap (~3 tiles): v²/2g ≈ 3.3
 const ROLL_BOUNCE = -7.9;
@@ -352,7 +360,10 @@ export class RollerLabMinigame extends BaseMinigame {
     // when the drive window ends, the marble decelerates through drag
     // below (not an instant stop) so it actually rolls to a halt
     this.limitSpeed();
-    const drag = Math.pow(this.isGrounded() ? 0.35 : 0.78, dt * 5);
+    // a gentle taper, not a brake -- the old 0.35 base lost ~90% of a
+    // roll's speed within half a second of the drive window ending,
+    // which read as a hard stop rather than a marble coasting out
+    const drag = Math.pow(this.isGrounded() ? 0.55 : 0.78, dt * 5);
     this.vx *= drag;
     this.spin += this.vx * dt * 3.8;
     const sub = Math.max(1, Math.ceil(dt / 0.018));
@@ -405,8 +416,12 @@ export class RollerLabMinigame extends BaseMinigame {
     return null;
   }
   limitSpeed() {
-    const sp = Math.hypot(this.vx, this.vy);
-    if (sp > ROLL_MAX_SPEED) { this.vx = this.vx / sp * ROLL_MAX_SPEED; this.vy = this.vy / sp * ROLL_MAX_SPEED; }
+    // capped per-axis, not as one combined vector -- gravity/bounces are
+    // purely vertical and driving is purely horizontal, so coupling them
+    // into one speed limit let horizontal drift quietly rob a bounce of
+    // its vertical kick
+    this.vx = Math.max(-ROLL_MAX_VX, Math.min(ROLL_MAX_VX, this.vx));
+    this.vy = Math.max(-ROLL_MAX_VY, Math.min(ROLL_MAX_VY, this.vy));
   }
   isGrounded() {
     // only the row strictly below the ball's own footprint counts —
@@ -593,16 +608,16 @@ export class RollerLabMinigame extends BaseMinigame {
     g.beginPath(); g.ellipse(bx, by + r * .86, r * .9, r * .24, 0, 0, 7); g.fill();
     g.fillStyle = '#ff9ec5'; g.beginPath(); g.arc(bx, by, r, 0, 7); g.fill();
     g.strokeStyle = '#b85c8a'; g.lineWidth = Math.max(2, cell * .05); g.stroke();
-    g.fillStyle = '#ffd1e3'; g.beginPath(); g.arc(bx - r * .24, by - r * .28, r * .28, 0, 7); g.fill();
+    g.fillStyle = '#ffd1e3'; g.beginPath(); g.arc(bx - r * .26, by - r * .3, r * .34, 0, 7); g.fill();
     g.fillStyle = '#3b2948';
-    g.beginPath(); g.arc(bx - r * .33, by - r * .12, r * .085, 0, 7); g.fill();
-    g.beginPath(); g.arc(bx + r * .33, by - r * .12, r * .085, 0, 7); g.fill();
+    g.beginPath(); g.arc(bx - r * .33, by - r * .12, r * .095, 0, 7); g.fill();
+    g.beginPath(); g.arc(bx + r * .33, by - r * .12, r * .095, 0, 7); g.fill();
     g.fillStyle = '#fff';
-    g.beginPath(); g.arc(bx - r * .36, by - r * .16, r * .028, 0, 7); g.fill();
-    g.beginPath(); g.arc(bx + r * .30, by - r * .16, r * .028, 0, 7); g.fill();
+    g.beginPath(); g.arc(bx - r * .37, by - r * .17, r * .034, 0, 7); g.fill();
+    g.beginPath(); g.arc(bx + r * .29, by - r * .17, r * .034, 0, 7); g.fill();
     g.fillStyle = '#ff74a8';
-    g.beginPath(); g.arc(bx - r * .48, by + r * .08, r * .095, 0, 7); g.fill();
-    g.beginPath(); g.arc(bx + r * .48, by + r * .08, r * .095, 0, 7); g.fill();
+    g.beginPath(); g.arc(bx - r * .48, by + r * .08, r * .12, 0, 7); g.fill();
+    g.beginPath(); g.arc(bx + r * .48, by + r * .08, r * .12, 0, 7); g.fill();
     g.strokeStyle = '#6d4160'; g.lineWidth = Math.max(1.5, cell * .035);
     g.beginPath(); g.arc(bx, by + r * .06, r * .22, 0.15, Math.PI - 0.15); g.stroke();
     g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = Math.max(2, cell * .04);
@@ -614,33 +629,57 @@ export class RollerLabMinigame extends BaseMinigame {
   drawRollTile(g: Ctx, ch: string, x: number, y: number, cell: number) {
     g.fillStyle = '#d9f2e7'; rr(g, x + 1, y + 1, cell - 2, cell - 2, 8); g.fill();
     if (ch === '#') {
-      g.fillStyle = '#7a6a8a'; rr(g, x + 2, y + 2, cell - 4, cell - 4, 7); g.fill();
+      g.fillStyle = '#8f81a0'; rr(g, x + 2, y + 2, cell - 4, cell - 4, cell * .3); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.22)';
+      rr(g, x + cell * .22, y + cell * .16, cell * .5, cell * .22, cell * .11); g.fill();
     } else if (ch === '*') {
       starPath(g, x + cell / 2, y + cell / 2, cell * .27); g.fillStyle = '#ffd95f'; g.fill();
     } else if (ch === 'K') {
-      g.fillStyle = '#ffb84f'; g.beginPath(); g.arc(x + cell * .43, y + cell * .5, cell * .16, 0, 7); g.fill();
-      g.fillRect(x + cell * .52, y + cell * .47, cell * .24, cell * .08);
-      g.fillRect(x + cell * .68, y + cell * .5, cell * .06, cell * .13);
+      g.fillStyle = '#ffb84f';
+      g.beginPath(); g.arc(x + cell * .38, y + cell * .5, cell * .17, 0, 7); g.fill();
+      g.fillStyle = '#d9f2e7'; g.beginPath(); g.arc(x + cell * .38, y + cell * .5, cell * .075, 0, 7); g.fill();
+      g.fillStyle = '#ffb84f';
+      rr(g, x + cell * .5, y + cell * .455, cell * .28, cell * .09, cell * .045); g.fill();
+      rr(g, x + cell * .64, y + cell * .5, cell * .08, cell * .15, cell * .04); g.fill();
+      rr(g, x + cell * .75, y + cell * .5, cell * .07, cell * .11, cell * .035); g.fill();
     } else if (ch === 'D') {
-      g.fillStyle = this.hasKey ? 'rgba(154,219,122,.45)' : '#d8a45f';
-      rr(g, x + cell * .2, y + cell * .15, cell * .6, cell * .7, 8); g.fill();
-      label(g, this.hasKey ? 'open' : 'gate', x + cell / 2, y + cell / 2, Math.max(10, cell * .18), '#5a4a6a');
+      g.fillStyle = this.hasKey ? 'rgba(154,219,122,.5)' : '#d8a45f';
+      rr(g, x + cell * .16, y + cell * .12, cell * .68, cell * .76, cell * .3); g.fill();
+      g.strokeStyle = this.hasKey ? '#7fbf5a' : '#a8763a'; g.lineWidth = Math.max(2, cell * .04); g.stroke();
+      g.fillStyle = this.hasKey ? '#5a8a3a' : '#8a5a2a';
+      g.beginPath(); g.arc(x + cell * .62, y + cell * .52, cell * .06, 0, 7); g.fill();
+      label(g, this.hasKey ? 'open' : 'gate', x + cell / 2, y + cell * .88, Math.max(9, cell * .14), '#5a4a6a');
     } else if (ch === 'B') {
-      g.fillStyle = '#d49a5c'; rr(g, x + cell * .16, y + cell * .18, cell * .68, cell * .64, 8); g.fill();
-      g.strokeStyle = '#8a5a35'; g.lineWidth = Math.max(2, cell * .05); g.stroke();
-      g.strokeStyle = '#a87840'; g.lineWidth = Math.max(2, cell * .04);
-      g.beginPath(); g.moveTo(x + cell * .28, y + cell * .5); g.lineTo(x + cell * .72, y + cell * .5); g.stroke();
-      g.beginPath(); g.moveTo(x + cell * .5, y + cell * .28); g.lineTo(x + cell * .5, y + cell * .72); g.stroke();
+      g.fillStyle = '#e0ab72'; rr(g, x + cell * .14, y + cell * .18, cell * .72, cell * .64, cell * .22); g.fill();
+      g.strokeStyle = '#9a6a3f'; g.lineWidth = Math.max(2, cell * .05); g.stroke();
+      g.strokeStyle = '#c98a55'; g.lineWidth = Math.max(2, cell * .045); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(x + cell * .3, y + cell * .5); g.lineTo(x + cell * .7, y + cell * .5); g.stroke();
+      g.beginPath(); g.moveTo(x + cell * .5, y + cell * .3); g.lineTo(x + cell * .5, y + cell * .7); g.stroke();
+      g.lineCap = 'butt';
+      g.fillStyle = 'rgba(255,255,255,.4)';
+      g.beginPath(); g.arc(x + cell * .3, y + cell * .3, cell * .06, 0, 7); g.fill();
     } else if (ch === '^') {
-      g.fillStyle = '#ff9ec5'; rr(g, x + cell * .18, y + cell * .56, cell * .64, cell * .22, 8); g.fill();
+      g.fillStyle = '#ff9ec5'; rr(g, x + cell * .16, y + cell * .58, cell * .68, cell * .2, cell * .1); g.fill();
       g.strokeStyle = '#b85c8a'; g.lineWidth = Math.max(2, cell * .05); g.stroke();
-      g.fillStyle = '#ffd95f';
-      g.beginPath(); g.moveTo(x + cell * .5, y + cell * .22); g.lineTo(x + cell * .72, y + cell * .55); g.lineTo(x + cell * .28, y + cell * .55); g.closePath(); g.fill();
+      g.strokeStyle = '#ffd95f'; g.lineWidth = Math.max(3, cell * .09);
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      g.beginPath();
+      g.moveTo(x + cell * .32, y + cell * .5);
+      g.lineTo(x + cell * .5, y + cell * .24);
+      g.lineTo(x + cell * .68, y + cell * .5);
+      g.stroke();
+      g.lineCap = 'butt'; g.lineJoin = 'miter';
     } else if (ch === 'G') {
-      g.fillStyle = '#7fb8e8'; rr(g, x + cell * .18, y + cell * .2, cell * .64, cell * .6, 10); g.fill();
-      label(g, 'GO', x + cell / 2, y + cell / 2, Math.max(14, cell * .28), '#fff8ee');
+      g.fillStyle = 'rgba(127,184,232,.3)';
+      g.beginPath(); g.arc(x + cell / 2, y + cell / 2, cell * .42, 0, 7); g.fill();
+      g.fillStyle = '#7fb8e8'; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, cell * .32, 0, 7); g.fill();
+      g.strokeStyle = '#5a8fc0'; g.lineWidth = Math.max(2, cell * .04); g.stroke();
+      label(g, 'GO', x + cell / 2, y + cell / 2, Math.max(13, cell * .26), '#fff8ee');
     } else if (ch === 'S') {
-      g.fillStyle = '#ff9ec5'; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, cell * .22, 0, 7); g.fill();
+      g.fillStyle = 'rgba(255,158,197,.3)';
+      g.beginPath(); g.arc(x + cell / 2, y + cell / 2, cell * .34, 0, 7); g.fill();
+      g.fillStyle = '#ff9ec5'; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, cell * .2, 0, 7); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(x + cell * .44, y + cell * .44, cell * .06, 0, 7); g.fill();
     }
     g.strokeStyle = 'rgba(120,90,120,.18)'; g.lineWidth = 1; g.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
   }
