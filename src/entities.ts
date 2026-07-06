@@ -43,6 +43,15 @@ export const Entities = (() => {
       },
     },
     {
+      id: 'isaac', name: 'Isaac', sprite: 'isaac', radius: 0.45,
+      where: (G) => (G.hour >= 18 && G.hour < 21.5) ? { map: 'home', x: 6, y: 6 } : { map: 'home', x: 3, y: 6 },
+      talk: (G) => {
+        if (G.hour >= 18 && G.hour < 21.5) return ['Isaac pats his high-chair tray. "Ba! Ba!"', 'He offers one very tiny pea.'];
+        if (G.hour >= 19) return ['Isaac yawns so big his whole little face scrunches up.'];
+        return ['Baby brother Isaac waves both hands at Starry.', 'He says "Da!" and looks very proud of it.'];
+      },
+    },
+    {
       id: 'msbloom', name: 'Ms. Bloom', sprite: 'msbloom', radius: 1, teaches: 'school',
       freeGames: [{ game: 'math', label: 'Play Number Time' }],
       freeGamePrompt: 'Want to play a little number game?',

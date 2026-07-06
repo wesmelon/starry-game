@@ -59,6 +59,38 @@ export const SpriteLib = (() => {
     up:   ['...TTTTTT...', '..TTTTTTTT..', '..OOOOOOOO..', '...OO..OO...'],
     left: ['...TTTTTT...', '..TTTTTTTT..', '..OOOOOOOO..', '....OO.OO...'],
   };
+  const BABY: Record<string, string[]> = {
+    down: [
+      '...HHHHHH...',
+      '..HHHHHHHH..',
+      '..HSSSSSSH..',
+      '..HSESSSEH..',
+      '..HSRSSRSH..',
+      '...SSSSSS...',
+      '..TTTTTTTT..',
+      '..TTOOOOTT..',
+    ],
+    up: [
+      '...HHHHHH...',
+      '..HHHHHHHH..',
+      '..HHHHHHHH..',
+      '..HHHHHHHH..',
+      '..HHHHHHHH..',
+      '...HHHHHH...',
+      '..TTTTTTTT..',
+      '..TTOOOOTT..',
+    ],
+    left: [
+      '...HHHHHH...',
+      '..HHHHHHHH..',
+      '..HSSSSHHH..',
+      '..HSESSHHH..',
+      '..HSRSSHHH..',
+      '...SSSSHH...',
+      '..TTTTTTTT..',
+      '..TTOOOOTT..',
+    ],
+  };
   const ADULT: Record<string, string[]> = {
     down: [
       '....PPPP....',
@@ -132,6 +164,7 @@ export const SpriteLib = (() => {
     starry:   { kind:'kid',   pal:{ H:'#7a4a2e', D:'#ff9ec5', d:'#ee7fae', P:'#ff5f9e', B:'#e0567f' } },
     mom:      { kind:'adult', pal:{ H:'#5a3a22', P:'#5a3a22', D:'#8fbfe8', A:'#fff7ee', B:'#8a5a3a' } },
     dad:      { kind:'adult', pal:{ H:'#4a2f1e', D:'#e0a458', B:'#5a4a3a' } },
+    isaac:    { kind:'baby',  pal:{ H:'#6e4426', T:'#9adbc8', O:'#7fb8e8', B:'#5a6a8a' } },
     msbloom:  { kind:'adult', pal:{ H:'#b97a3f', P:'#b97a3f', D:'#a8d8a0', B:'#6a8a5a' } },
     coach:    { kind:'adult', pal:{ H:'#3a3530', D:'#ff8a5a', B:'#4a4a4a' } },
     madame:   { kind:'adult', pal:{ H:'#2a2530', P:'#2a2530', D:'#cdb0ee', B:'#9a7ad0' } },
@@ -252,7 +285,7 @@ export const SpriteLib = (() => {
   }
 
   function buildChar(def: CharDef) {
-    let body = def.kind === 'adult' ? ADULT : GIRL;
+    let body = def.kind === 'adult' ? ADULT : def.kind === 'baby' ? BABY : GIRL;
     const bottom = def.kind === 'boy' ? BOY_BOTTOM : null;
     const out: Record<string, HTMLCanvasElement[]> = {};
     for (const dir of ['down', 'up', 'left', 'right']) {

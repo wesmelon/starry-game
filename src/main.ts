@@ -188,16 +188,18 @@ export const Game = (() => {
 
   // ---------- family dinner ----------
   const DINNER_FROM = 18, DINNER_TO = 21.5;
+  const DINNER_TABLE = { x: 5, y: 5 };
   function dinnerAvailable() {
     return hour() >= DINNER_FROM && hour() < DINNER_TO && G.fun.dinner !== G.day;
   }
   function haveDinner(npc: Npc) {
-    AudioSys.sfx('munch');
-    funReward('dinner', 1, 35);
-    stats.lines.push('Dinner with Mom and Dad');
-    UI.say('', [npc.id === 'dad' ? 'Dad tells a very silly joke. Starry giggles with a mouth full of peas.'
-                                  : 'Mom passes the peas. Dad tells a very silly joke.',
-                'Yum yum, all gone! Full tummy, happy heart.']);
+    startAnim('dinner', DINNER_TABLE, 4.6, () => {
+      funReward('dinner', 1, 35);
+      stats.lines.push('Dinner with Mom, Dad, and Isaac');
+      UI.say('Family Dinner', [npc.id === 'dad' ? 'Dad tells a very silly joke. Isaac squeals and Starry giggles with a mouth full of peas.'
+                                                : 'Mom passes the peas. Dad tells a very silly joke, and Isaac claps his sticky hands.',
+                              'Yum yum, all gone! Full tummy, happy heart.']);
+    });
   }
   function startClass(type: string) {
     state = 'minigame';
@@ -494,13 +496,30 @@ export const Game = (() => {
       cue('p1', 0, () => AudioSys.sfx('pop'));
       cue('p2', 0.55, () => AudioSys.sfx('pop'));
       if (p >= 1) player.y = a.oy;
+    } else if (a.type === 'dinner') {
+      const settle = clamp01(a.t / 0.5);
+      player.x = lerp(a.ox, a.tx + 1.0, settle);
+      player.y = lerp(a.oy, a.ty + 1.35, settle);
+      player.dir = 'up';
+      player.moving = false;
+      player.animT = a.t;
+      cue('sit', 0, () => AudioSys.sfx('confirm'));
+      cue('m1', 0.8, () => AudioSys.sfx('munch'));
+      cue('m2', 1.55, () => AudioSys.sfx('munch'));
+      cue('baby', 2.25, () => AudioSys.sfx('pop'));
+      cue('m3', 3.1, () => AudioSys.sfx('munch'));
+      cue('laugh', 3.85, () => { AudioSys.sfx('whee'); sparkles(a.tx + 1.0, a.ty + 0.2); });
+      if (p >= 1) { player.x = a.ox; player.y = a.oy; player.dir = 'down'; }
     } else if (a.type === 'bath') {
-      const ramp = Math.min(1, a.t / 0.4) * clamp01((a.dur - a.t) / 0.4);
+      const ramp = Math.min(1, a.t / 0.5) * clamp01((a.dur - a.t) / 0.5);
       player.x = a.tx + 0.5;
-      player.y = a.ty + 0.9 - Math.abs(Math.sin(a.t * 5)) * 0.22 * ramp;
+      player.y = a.ty + 0.9 - Math.abs(Math.sin(a.t * 5.4)) * 0.24 * ramp;
       player.dir = 'up';
       cue('s1', 0, () => { AudioSys.sfx('splash'); bubbles(a.tx + 0.5, a.ty + 0.6); });
-      cue('s2', 1.0, () => { AudioSys.sfx('splash'); bubbles(a.tx + 0.5, a.ty + 0.6); });
+      cue('s2', 0.75, () => { AudioSys.sfx('splash'); bubbles(a.tx + 0.25, a.ty + 0.7); });
+      cue('duck', 1.45, () => AudioSys.sfx('quack'));
+      cue('s3', 2.15, () => { AudioSys.sfx('splash'); bubbles(a.tx + 0.75, a.ty + 0.55); });
+      cue('s4', 3.0, () => { AudioSys.sfx('sparkle'); bubbles(a.tx + 0.5, a.ty + 0.45); });
       if (p >= 1) { player.x = a.ox; player.y = a.oy; sparkles(a.ox, a.oy - 0.3); }
     }
     if (a.t >= a.dur) {
@@ -637,9 +656,9 @@ export const Game = (() => {
         { label: 'Not now', value: null },
       ], v => {
         if (v === 'bath') {
-          startAnim('bath', f, 2.2, () => {
+          startAnim('bath', f, 3.7, () => {
             funReward('bath', 1, 20);
-            UI.say('Starry', ['Splish splash! All squeaky clean and sleepy.']);
+            UI.say('Starry', ['Splish splash! The ducky did a tiny parade, and Starry is all squeaky clean.']);
           });
         }
       });
@@ -1068,7 +1087,7 @@ export const Game = (() => {
       stats.lines.push('Missed school today. Tomorrow for sure!');
       G.done.school = true;
     }
-    if (crossed(DINNER_FROM * 60) && G.fun.dinner !== G.day) UI.toast('Dinnertime! Head home to eat with Mom and Dad.', 'plate');
+    if (crossed(DINNER_FROM * 60) && G.fun.dinner !== G.day) UI.toast('Dinnertime! Head home to eat with Mom, Dad, and Isaac.', 'plate');
     if (player.map === 'town' && hour() >= 20) award('stargazer');
     if (G.tmin >= DAY_END) { UI.toast('*yaaawn* So sleepy...', 'moon'); goToSleep(false); }
   }
@@ -1113,6 +1132,118 @@ export const Game = (() => {
     return { x: cx, y: cy };
   }
 
+  function oval(x: number, y: number, rx: number, ry: number, col: string) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, 7);
+    ctx.fill();
+  }
+  function tableSeat(x: number, y: number, w: number, h: number, col: string) {
+    ctx.fillStyle = col;
+    ctx.fillRect(x - w / 2, y - h / 2, w, h);
+    ctx.fillStyle = 'rgba(90,60,40,.22)';
+    ctx.fillRect(x - w / 2, y + h / 2 - 5, w, 5);
+  }
+  function plate(x: number, y: number, s: number) {
+    oval(x, y, 16 * s, 9 * s, '#fffdf5');
+    oval(x, y + 1 * s, 11 * s, 5 * s, '#efe3d4');
+    ctx.fillStyle = '#62b84e';
+    ctx.fillRect(x - 6 * s, y - 2 * s, 4 * s, 4 * s);
+    ctx.fillRect(x + 4 * s, y + 1 * s, 3 * s, 3 * s);
+    ctx.fillStyle = '#e8b86a';
+    ctx.fillRect(x - 1 * s, y - 4 * s, 8 * s, 3 * s);
+    ctx.fillStyle = '#e85a5a';
+    ctx.fillRect(x - 9 * s, y + 2 * s, 4 * s, 3 * s);
+  }
+  function mealBite(px: number, py: number, mx: number, my: number, off: number, col: string) {
+    if (!anim) return;
+    const lift = Math.max(0, Math.sin(anim.t * 4.3 + off));
+    if (lift < 0.18) return;
+    const q = clamp01((lift - 0.18) / 0.82);
+    const x = lerp(px, mx, q);
+    const y = lerp(py, my, q) - Math.sin(q * Math.PI) * 12;
+    ctx.strokeStyle = '#d8d0c0';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    oval(x, y, 4, 3, col);
+  }
+  function drawDinnerCutscene(cam: Cam) {
+    if (!anim || anim.type !== 'dinner') return;
+    const a = anim;
+    const cx = (a.tx + 1.0) * T - cam.x;
+    const cy = (a.ty + 0.82) * T - cam.y;
+    const chewFrame = 1 + Math.floor(a.t * 5) % 2;
+
+    ctx.fillStyle = 'rgba(45,30,55,.12)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    tableSeat(cx, cy - 54, 40, 34, '#c9935c');
+    tableSeat(cx - 74, cy + 2, 34, 44, '#c9935c');
+    tableSeat(cx + 74, cy + 2, 34, 44, '#c9935c');
+    tableSeat(cx, cy + 60, 42, 28, '#c9935c');
+
+    drawChar('isaac', { x: a.tx + 1.0, y: a.ty + 0.45, dir: 'down', moving: true, animT: a.t }, cam, chewFrame);
+    drawChar('mom', { x: a.tx - 0.25, y: a.ty + 1.05, dir: 'right', moving: true, animT: a.t }, cam, chewFrame);
+    drawChar('dad', { x: a.tx + 2.25, y: a.ty + 1.05, dir: 'left', moving: true, animT: a.t }, cam, chewFrame);
+
+    ctx.fillStyle = 'rgba(40,28,35,.18)';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 9, 86, 42, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#c98f54';
+    ctx.beginPath(); ctx.ellipse(cx, cy, 86, 42, 0, 0, 7); ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#a87840';
+    ctx.beginPath(); ctx.ellipse(cx, cy, 86, 42, 0, 0, 7); ctx.stroke();
+    ctx.fillStyle = '#dba368';
+    ctx.beginPath(); ctx.ellipse(cx, cy - 9, 72, 26, 0, 0, 7); ctx.fill();
+
+    const momPlate = [cx - 46, cy] as const;
+    const dadPlate = [cx + 46, cy] as const;
+    const isaacPlate = [cx, cy - 24] as const;
+    const starryPlate = [cx, cy + 28] as const;
+    plate(momPlate[0], momPlate[1], 0.92);
+    plate(dadPlate[0], dadPlate[1], 0.92);
+    plate(isaacPlate[0], isaacPlate[1], 0.78);
+    plate(starryPlate[0], starryPlate[1], 0.95);
+
+    mealBite(momPlate[0] - 6, momPlate[1] - 2, cx - 60, cy - 42, 0.2, '#62b84e');
+    mealBite(dadPlate[0] + 6, dadPlate[1] - 1, cx + 62, cy - 42, 1.35, '#e8b86a');
+    mealBite(isaacPlate[0] + 2, isaacPlate[1] - 2, cx + 1, cy - 58, 2.15, '#e85a5a');
+
+    drawChar('starry', { x: a.tx + 1.0, y: a.ty + 1.95, dir: 'up', moving: true, animT: a.t }, cam, chewFrame);
+    plate(starryPlate[0], starryPlate[1] + 10, 0.85);
+    mealBite(starryPlate[0] - 2, starryPlate[1] + 11, cx, cy + 55, 2.8, '#62b84e');
+  }
+  function drawBathCutscene(cam: Cam) {
+    if (!anim || anim.type !== 'bath') return;
+    const a = anim;
+    const cx = (a.tx + 0.5) * T - cam.x;
+    const cy = (a.ty + 0.78) * T - cam.y;
+    ctx.fillStyle = 'rgba(45,30,55,.08)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff5fa';
+    ctx.fillRect(cx - 36, cy - 16, 72, 32);
+    ctx.fillStyle = '#ffe0ec';
+    ctx.fillRect(cx - 36, cy - 16, 72, 7);
+    oval(cx, cy - 2, 30, 12, '#8fd4e8');
+    oval(cx + Math.sin(a.t * 3.1) * 13, cy - 10 + Math.sin(a.t * 5) * 2, 10, 6, '#fff8e4');
+    ctx.fillStyle = '#f2a444';
+    ctx.fillRect(cx - 13 + Math.sin(a.t * 3.1) * 13, cy - 12 + Math.sin(a.t * 5) * 2, 5, 3);
+    for (let i = 0; i < 7; i++) {
+      const bx = cx - 28 + i * 9 + Math.sin(a.t * 2 + i) * 3;
+      const by = cy - 20 - Math.abs(Math.sin(a.t * 3.4 + i)) * 12;
+      ctx.strokeStyle = `rgba(220,245,255,${(0.35 + (i % 3) * 0.15).toFixed(2)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, by, 3 + (i % 3), 0, 7); ctx.stroke();
+    }
+    ctx.fillStyle = '#ffb7d2';
+    ctx.fillRect(cx - 66, cy + 14, 38, 15);
+    ctx.fillStyle = '#fff5fa';
+    ctx.fillRect(cx - 62, cy + 18, 30, 3);
+  }
+
   function drawWorld() {
     const cam = camera();
     const W = canvas.width, H = canvas.height;
@@ -1143,13 +1274,15 @@ export const Game = (() => {
       }
     }
     // entities sorted by y
+    const dinnerScene = !!anim && anim.type === 'dinner';
     const ents: { y: number; draw: () => void }[] = [];
     for (const n of Entities.NPCS) {
       const ns = npcState[n.id];
+      if (dinnerScene && ['mom', 'dad', 'isaac'].includes(n.id)) continue;
       if (ns && ns.map === player.map)
         ents.push({ y: ns.y, draw: () => drawChar(n.sprite, ns, cam) });
     }
-    ents.push({ y: player.y, draw: () => drawPlayer(cam) });
+    if (!dinnerScene) ents.push({ y: player.y, draw: () => drawPlayer(cam) });
     for (const s of animState) {
       if (s.a.map === player.map) ents.push({ y: s.y, draw: () => drawAnimal(s, cam) });
     }
@@ -1169,6 +1302,8 @@ export const Game = (() => {
     }
     ents.sort((a, b) => a.y - b.y);
     for (const e of ents) e.draw();
+    drawDinnerCutscene(cam);
+    drawBathCutscene(cam);
     drawParts(cam);
     drawButterflies(cam);
     // interaction hint
